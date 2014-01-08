@@ -192,11 +192,21 @@ static void gradient(double * OUT_grad, size_t nvars,
                 *OUT_value += dot(approx->linear, x, nvars);
 }
 
+static inline double min(double x, double y)
+{
+        return (x<y)?x:y;
+}
+
+static inline double max(double x, double y)
+{
+        return (x>y)?x:y;
+}
+
 static void project(double * x, size_t n,
                     const double * lower, const double * upper)
 {
         for (size_t i = 0; i < n; i++)
-                x[i] = fmin(fmax(lower[i], x[i]), upper[i]);
+                x[i] = min(max(lower[i], x[i]), upper[i]);
 }
 
 static void step(double * zp, size_t n, double theta,
@@ -223,7 +233,7 @@ static void step(double * zp, size_t n, double theta,
                         }
                 } else {
                         double trial = zi - step*gi;
-                        zp[i] = fmin(fmax(li, trial), ui);
+                        zp[i] = min(max(li, trial), ui);
                 }
         }
 }
@@ -261,7 +271,7 @@ static double project_gradient_norm(const double * g, const double * x,
         for (size_t i = 0; i < n; i++) {
                 double xi = x[i];
                 double xp = xi-g[i];
-                xp = fmin(fmax(lower[i], xp), upper[i]);
+                xp = min(max(lower[i], xp), upper[i]);
                 double delta = xi-xp;
                 acc += delta*delta;
         }

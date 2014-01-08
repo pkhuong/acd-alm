@@ -93,7 +93,7 @@ static int sparse_matrix_swizzle(sparse_matrix_t matrix)
                 rows[i] = entry->row;
                 values[i] = entry->value;
         }
-        
+
         free(entries);
 
         return 0;
@@ -296,7 +296,7 @@ void random_test(size_t ncolumns, size_t nrows, size_t repeat)
                 sparse_matrix_multiply(y1, nrows, m, x, ncolumns, 0);
                 dense_mult(y2, dense, nrows, ncolumns, x);
                 assert(diff(y1, y2, nrows) < 1e-4);
-                
+
                 random_vector(xt, nrows);
                 sparse_matrix_multiply(y1t, ncolumns, m, xt, nrows, 1);
                 dense_mult_t(y2t, dense, nrows, ncolumns, xt);

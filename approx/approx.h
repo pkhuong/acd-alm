@@ -2,6 +2,7 @@
 #define APPROX_H
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include "../sparse-gemv/sparse-gemv.h"
 
 typedef struct approx * approx_t;
@@ -26,6 +27,7 @@ int approx_free(approx_t);
 
 int approx_update_step_sizes(approx_t); /* Call after mods to matrix/weight */
 
-double approx(double * x, size_t n, approx_t approx, size_t niter,
-              double max_pg, double max_value, double min_delta);
+double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
+                    double max_pg, double max_value, double min_delta,
+                    FILE * log, size_t period);
 #endif

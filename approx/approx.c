@@ -125,7 +125,7 @@ int approx_update_step_sizes(approx_t approx)
                 inv_v[columns[i]] += weight[row]*beta[row]*v*v;
         }
 
-        for (size_t i = 0; i < nnz; i++)
+        for (size_t i = 0; i < approx->nvars; i++)
                 inv_v[i] = 1.0/inv_v[i];
 
         return 0;
@@ -163,7 +163,7 @@ static void gradient(double * OUT_grad, size_t nvars,
                 if (OUT_value != NULL) {
                         double value = 0;
                         for (size_t i = 0; i < nrows; i++) {
-                                double v = OUT_violation[i] -= rhs[i];
+                                double v = OUT_violation[i] - rhs[i];
                                 double w = weight[i];
                                 value += .5*w*v*v;
                                 OUT_violation[i] = v*w;
@@ -319,8 +319,8 @@ static void destroy_state(struct approx_state * state)
         memset(state, 0, sizeof(struct approx_state));
 }
 
-static int iter(approx_t approx, struct approx_state * state,
-                double * OUT_pg)
+static double * iter(approx_t approx, struct approx_state * state,
+                     double * OUT_pg)
 {
         extrapolate_y(state->y, approx->nvars, state->theta,
                       state->x, state->z);
@@ -343,7 +343,7 @@ static int iter(approx_t approx, struct approx_state * state,
                 size_t total = approx->nvars*sizeof(double);
                 memcpy(state->x, state->z, total);
                 state->theta = 1;
-                return 1;
+                return state->x;
         }
 
         extrapolate_x(state->x, approx->nvars, state->theta,
@@ -357,7 +357,7 @@ static int iter(approx_t approx, struct approx_state * state,
                 state->zp = temp;
         }
 
-        return 0;
+        return state->zp;
 }
 
 static double diff(const double * x, const double * y, size_t n)
@@ -370,8 +370,31 @@ static double diff(const double * x, const double * y, size_t n)
         return sqrt(acc);
 }
 
-double approx(double * x, size_t n, approx_t approx, size_t niter,
-              double max_pg, double max_value, double min_delta)
+static double norm_2(const double * x, size_t n)
+{
+        double acc = 0;
+        for (size_t i = 0; i < n; i++) {
+                double xi = x[i];
+                acc += xi*xi;
+        }
+        return sqrt(acc);
+}
+
+static void print_log(FILE * log, size_t k,
+                      double value, double ng, double pg, double diff)
+{
+        if (log == NULL) return;
+
+        if (diff < HUGE_VAL)
+                fprintf(log, "\t%10zu %12f %12f %12f %12f\n",
+                        k, value, ng, pg, diff);
+        else   fprintf(log, "\t%10zu %12f %12f %12f\n",
+                       k, value, ng, pg);
+}
+
+double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
+                    double max_pg, double max_value, double min_delta,
+                    FILE * log, size_t period)
 {
         assert(n == approx->nvars);
 
@@ -386,30 +409,57 @@ double approx(double * x, size_t n, approx_t approx, size_t niter,
 
         const double * center = state.x;
         double value = state.value;
-        for (size_t i = 0; i < niter; i++) {
-                double pg = HUGE_VAL;
-                iter(approx, &state, &pg);
+        double ng = HUGE_VAL, pg = HUGE_VAL;
+        double delta = HUGE_VAL;
+        size_t i;
+        int restart = 0;
+        for (i = 0; i < niter; i++) {
+                delta = HUGE_VAL;
+                center = iter(approx, &state, &pg);
+                /* if (center == state.x) { */
+                /*         if (!restart) { */
+                /*                 restart = 1; */
+                /*                 if (log != NULL) */
+                /*                         fprintf(log, "\t\t"); */
+                /*         } */
+                /*         if (log != NULL) */
+                /*                 fprintf(log, "R"); */
+                /* } */
+                ng = norm_2(state.g, n);
                 value = state.value;
-                center = state.z;
                 if (pg < max_pg) break;
                 if (value < max_value) break;
 
-                if ((i+1)%100) continue;
-
-                center = state.x;
-                gradient(state.g, approx->nvars, state.violation,
-                         approx->nrhs,
-                         approx, state.x, &value);
-                pg = project_gradient_norm(state.g, state.x,
-                                           approx->nvars,
-                                           approx->lower, approx->upper);
-
-                if (diff(prev_x, state.x, n) < min_delta)
-                        break;
-                if (pg < max_pg) break;
-                if (value < max_value) break;
-                memcpy(prev_x, state.x, n*sizeof(double));
+                if ((i+1)%100 == 0) {
+                        center = state.x;
+                        gradient(state.g, approx->nvars, state.violation,
+                                 approx->nrhs,
+                                 approx, state.x, &value);
+                        pg = project_gradient_norm(state.g, state.x,
+                                                   approx->nvars,
+                                                   approx->lower, 
+                                                   approx->upper);
+                        delta = (diff(prev_x, state.x, n)
+                                 /norm_2(state.x, n));
+                        if (delta < min_delta)
+                                break;
+                        if (pg < max_pg) break;
+                        if (value < max_value) break;
+                        memcpy(prev_x, state.x, n*sizeof(double));
+                }
+                if ((i == 0) || ((i+1)%period == 0)) {
+                        if (restart) {
+                                restart = 0;
+                                printf("\n");
+                        }
+                        print_log(log, i+1, value, ng, pg, delta);
+                }
         }
+        if (restart) {
+                restart = 0;
+                printf("\n");
+        }
+        print_log(log, i+1, value, ng, pg, delta);
         memcpy(x, center, n*sizeof(double));
 
         free(prev_x);
@@ -417,3 +467,85 @@ double approx(double * x, size_t n, approx_t approx, size_t niter,
 
         return value;
 }
+
+#ifdef TEST_APPROX
+sparse_matrix_t random_matrix(size_t nrows, size_t ncolumns)
+{
+        size_t total = nrows*ncolumns;
+        size_t nnz = 0;
+        uint32_t * columns = calloc(total, sizeof(uint32_t));
+        uint32_t * rows = calloc(total, sizeof(uint32_t));
+        double * values = calloc(total, sizeof(double));
+        
+        for (size_t row = 0; row < nrows; row++) {
+                for (size_t column = 0; column < ncolumns; column++) {
+                        /* if (((1.0*random()/RAND_MAX) < .5) */
+                        /*     && (row != column)) */
+                        /*         continue; */
+                        columns[nnz] = column;
+                        rows[nnz] = row;
+                        values[nnz] = (2.0*random()/RAND_MAX) -1;
+                        nnz++;
+                }
+        }
+
+        sparse_matrix_t m = sparse_matrix_make(ncolumns, nrows, nnz,
+                                               rows, columns, values);
+        free(values);
+        free(rows);
+        free(columns);
+
+        return m;
+}
+
+void random_vector(double * vector, size_t n)
+{
+        for (size_t i = 0; i < n; i++)
+                vector[i] = ((2.0*random())/RAND_MAX)-1;
+}
+
+void test_1(size_t nrows, size_t ncolumns)
+{
+        sparse_matrix_t m = random_matrix(nrows, ncolumns);
+        double * solution = calloc(ncolumns, sizeof(double));
+        random_vector(solution, ncolumns);
+        double * rhs = calloc(nrows, sizeof(double));
+        double * x = calloc(ncolumns, sizeof(double));
+
+        assert(0 == sparse_matrix_multiply(rhs, nrows,
+                                           m, solution, ncolumns, 0));
+
+        approx_t a = approx_make(m, nrows, rhs, NULL, ncolumns,
+                                 NULL, NULL, NULL);
+        double v = approx_solve(x, ncolumns, a, -1U,
+                                0, 1e-10, 0,
+                                stdout, 10000);
+
+        double * residual = calloc(nrows, sizeof(double));
+        assert(0 == sparse_matrix_multiply(residual, nrows,
+                                           m, x, ncolumns, 0));
+        double d = diff(rhs, residual, nrows);
+        printf("r: %.18f %.18f %p\n", v, d, x);
+
+        assert(d < 1e-4);
+
+        free(residual);
+        approx_free(a);
+        free(x);
+        free(rhs);
+        free(solution);
+        sparse_matrix_free(m);
+}
+
+int main ()
+{
+        for (size_t i = 1; i < 20; i++) {
+                for (size_t j = 1; j < 20; j++) {
+                        printf("%zu %zu\n", i, j);
+                        test_1(i, j);
+                }
+        }
+
+        return 0;
+}
+#endif

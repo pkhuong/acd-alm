@@ -386,9 +386,9 @@ static void print_log(FILE * log, size_t k,
         if (log == NULL) return;
 
         if (diff < HUGE_VAL)
-                fprintf(log, "\t%10zu %12f %12f %12f %12f\n",
+                fprintf(log, "\t%10zu %12g %12g %12g %12g\n",
                         k, value, ng, pg, diff);
-        else   fprintf(log, "\t%10zu %12f %12f %12f\n",
+        else   fprintf(log, "\t%10zu %12g %12g %12g\n",
                        k, value, ng, pg);
 }
 
@@ -479,9 +479,9 @@ sparse_matrix_t random_matrix(size_t nrows, size_t ncolumns)
         
         for (size_t row = 0; row < nrows; row++) {
                 for (size_t column = 0; column < ncolumns; column++) {
-                        /* if (((1.0*random()/RAND_MAX) < .5) */
-                        /*     && (row != column)) */
-                        /*         continue; */
+                        if (((1.0*random()/RAND_MAX) < .5)
+                            && (row != column))
+                                continue;
                         columns[nnz] = column;
                         rows[nnz] = row;
                         values[nnz] = (2.0*random()/RAND_MAX) -1;
@@ -518,7 +518,7 @@ void test_1(size_t nrows, size_t ncolumns)
         approx_t a = approx_make(m, nrows, rhs, NULL, ncolumns,
                                  NULL, NULL, NULL);
         double v = approx_solve(x, ncolumns, a, -1U,
-                                0, 1e-10, 0,
+                                0, 1e-13, 0,
                                 stdout, 10000);
 
         double * residual = calloc(nrows, sizeof(double));
@@ -527,7 +527,7 @@ void test_1(size_t nrows, size_t ncolumns)
         double d = diff(rhs, residual, nrows);
         printf("r: %.18f %.18f %p\n", v, d, x);
 
-        assert(d < 1e-4);
+        assert(d < 1e-6);
 
         free(residual);
         approx_free(a);
@@ -539,8 +539,8 @@ void test_1(size_t nrows, size_t ncolumns)
 
 int main ()
 {
-        for (size_t i = 1; i < 20; i++) {
-                for (size_t j = 1; j < 20; j++) {
+        for (size_t i = 10; i <= 20; i++) {
+                for (size_t j = 10; j <= 20; j++) {
                         printf("%zu %zu\n", i, j);
                         test_1(i, j);
                 }

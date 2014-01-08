@@ -11,7 +11,7 @@ struct approx {
         double * rhs;
         double * weight; /* \sum_i weight_i [(Ax-b)_i]^2 */
         double * linear; /* linear x + [LS] */
-        
+
         double * lower, * upper; /* box */
 
         uint32_t * beta;
@@ -380,7 +380,7 @@ double approx(double * x, size_t n, approx_t approx, size_t niter,
         memcpy(state.x, x, n*sizeof(double));
         project(state.x, n, approx->lower, approx->upper);
         memcpy(state.z, state.x, n*sizeof(double));
-        
+
         double * prev_x = calloc(n, sizeof(double));
         memcpy(prev_x, state.x, n*sizeof(double));
 
@@ -397,7 +397,7 @@ double approx(double * x, size_t n, approx_t approx, size_t niter,
                 if ((i+1)%100) continue;
 
                 center = state.x;
-                gradient(state.g, approx->nvars, state.violation, 
+                gradient(state.g, approx->nvars, state.violation,
                          approx->nrhs,
                          approx, state.x, &value);
                 pg = project_gradient_norm(state.g, state.x,

@@ -312,7 +312,7 @@ void random_test(size_t ncolumns, size_t nrows, size_t repeat)
         sparse_matrix_free(m);
 }
 
-int main ()
+int main()
 {
         for (size_t i = 0; i < 20; i++) {
                 for (size_t j = 0; j < 20; j++) {

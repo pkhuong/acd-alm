@@ -447,7 +447,7 @@ double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         if (value < max_value) break;
                         memcpy(prev_x, state.x, n*sizeof(double));
                 }
-                if ((i == 0) || ((i+1)%period == 0)) {
+                if ((i == 0) || (period && ((i+1)%period == 0))) {
                         if (restart) {
                                 restart = 0;
                                 printf("\n");

@@ -271,9 +271,15 @@ static double next_theta(double theta)
         return .5*(sqrt(theta4 + 4*theta2)-theta2);
 }
 
-static double dot_diff(const double * g, const double * z, const double * zp,
-                       size_t n)
+static double dot_diff(const struct vector * gv,
+                       const struct vector * zv, const struct vector * zpv)
 {
+        size_t n = gv->n;
+        assert(zv->n == n);
+        assert(zpv->n == n);
+
+        const double * g = gv->x, * z = zv->x, * zp = zpv->x;
+
         double acc = 0;
         for (size_t i = 0; i < n; i++)
                 acc += g[i]*(zp[i]-z[i]);
@@ -367,7 +373,7 @@ static double * iter(approx_t approx, struct approx_state * state,
                                         approx->nvars,
                                         approx->lower, approx->upper);
 
-        if (dot_diff(state->g.x, state->z.x, state->zp.x, approx->nvars) > 0) {
+        if (dot_diff(&state->g, &state->z, &state->zp) > 0) {
                 /* Oscillation */
                 size_t total = approx->nvars*sizeof(double);
                 memcpy(state->x.x, state->z.x, total);

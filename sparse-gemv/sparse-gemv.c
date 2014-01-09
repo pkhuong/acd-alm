@@ -7,7 +7,7 @@
 #include <math.h>
 
 #define SWAP(X, Y) do {                         \
-                typeof(X) temp = (X);           \
+                __typeof__(X) temp = (X);       \
                 (X) = (Y);                      \
                 (Y) = temp;                     \
         } while (0)

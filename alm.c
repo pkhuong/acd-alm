@@ -291,7 +291,7 @@ int alm_solve(alm_t alm, size_t niter, double * x, size_t nvars,
         init_alm_state(&state, alm);
         project_multipliers(lambda, alm);
 
-        double pg, max_viol;
+        double pg = HUGE_VAL, max_viol = HUGE_VAL;
         int ret = 1;
         for (size_t i = 0; i < niter; i++) {
                 int status = iter(&state, alm, x, lambda, log, i+1,

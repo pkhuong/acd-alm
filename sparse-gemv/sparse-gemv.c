@@ -231,6 +231,23 @@ static void mult(double * out,
         }
 }
 
+static void mult2(double ** out,
+                 size_t nnz,
+                 const uint32_t * columns, const uint32_t * rows,
+                 const double * values,
+                 const double ** x)
+{
+        double * out0 = out[0], * out1 = out[1];
+        const double * x0 = x[0], * x1 = x[1];
+        for (size_t i = 0; i < nnz; i++) {
+                uint32_t col = columns[i],
+                        row = rows[i];
+                double v = values[i];
+                out0[row] += v*x0[col];
+                out1[row] += v*x1[col];
+        }
+}
+
 static void mult_crs(double * out, struct crs * crs, const double * x)
 {
         size_t nrows = crs->nrows;
@@ -244,6 +261,29 @@ static void mult_crs(double * out, struct crs * crs, const double * x)
                 for (; begin < end; begin++)
                         acc += values[begin]*x[columns[begin]];
                 out[i] = acc;
+        }
+}
+
+static void mult_crs2(double ** out, struct crs * crs, const double ** x)
+{
+        size_t nrows = crs->nrows;
+        const uint32_t * rows_indices = crs->rows_indices,
+                * columns = crs->columns;
+        const double * values = crs->values;
+        double * out0 = out[0], * out1 = out[1];
+        const double * x0 = x[0], * x1 = x[1];
+        for (size_t i = 0; i < nrows; i++) {
+                uint32_t begin = rows_indices[i],
+                        end = rows_indices[i+1];
+                double acc0 = 0, acc1 = 0;
+                for (; begin < end; begin++) {
+                        double v = values[begin];
+                        uint32_t col = columns[begin];
+                        acc0 += v*x0[col];
+                        acc1 += v*x1[col];
+                }
+                out0[i] = acc0;
+                out1[i] = acc1;
         }
 }
 
@@ -270,6 +310,34 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
 #else
         (void)mult;
         mult_crs(OUT_y, transpose?&a->transpose:&a->matrix, x);
+#endif
+        return 0;
+}
+
+int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
+                            const sparse_matrix_t a,
+                            const double ** x, size_t nx,
+                            int transpose)
+{
+        size_t nrows = a->nrows,
+                ncolumns = a->ncolumns;
+        uint32_t * rows = a->rows,
+                * columns = a->columns;
+        if (transpose) {
+                SWAP(nrows, ncolumns);
+                SWAP(rows, columns);
+        }
+
+        assert(ny == nrows);
+        assert(nx == ncolumns);
+#ifdef SWIZZLED_MULT
+        (void)mult_crs2;
+        memset(OUT_y[0], 0, sizeof(double)*ny);
+        memset(OUT_y[1], 0, sizeof(double)*ny);
+        mult2(OUT_y, a->nnz, columns, rows, a->values, x);
+#else
+        (void)mult2;
+        mult_crs2(OUT_y, transpose?&a->transpose:&a->matrix, x);
 #endif
         return 0;
 }

@@ -25,6 +25,10 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t a,
                            const double * x, size_t nx,
                            int transpose);
+int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
+                             const sparse_matrix_t a,
+                             const double ** x, size_t nx,
+                             int transpose);
 
 sparse_matrix_t sparse_matrix_read(FILE * stream);
 #endif

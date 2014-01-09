@@ -135,7 +135,7 @@ int approx_update_step_sizes(approx_t approx)
 
 struct vector {
         double * x;
-        double * violation; /* scaled Ax-b */
+        double * violation; /* Ax-b */
         size_t n;
         size_t nviolation;
         int violationp;
@@ -241,44 +241,49 @@ static void compute_violation(struct vector * xv, approx_t approx)
 
         assert(0 == sparse_matrix_multiply(xv->violation, nrows,
                                            approx->matrix, xv->x, nvars, 0));
-        const double * rhs = approx->rhs,
-                * weight = approx->weight;
+        const double * rhs = approx->rhs;
         double * viol = xv->violation;
-        for (size_t i = 0; i < nrows; i++) {
-                double v = viol[i] - rhs[i];
-                viol[i] = v*weight[i];
-        }
+        for (size_t i = 0; i < nrows; i++)
+                viol[i] -= rhs[i];
         xv->violationp = 1;
 }
 
 static void gradient(struct vector * OUT_grad,
-                     approx_t approx,
+                     approx_t approx, struct vector * OUT_scaled,
                      struct vector * xv, double * OUT_value)
 {
         size_t nvars = OUT_grad->n,
                 nrows = xv->nviolation;
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
+        assert(nrows == OUT_scaled->n);
         assert(nvars == xv->n);
 
         if (!xv->violationp || 1)
                 compute_violation(xv, approx);
 
-        if (OUT_value != NULL) {
+        double * scaled = OUT_scaled->x;
+        {
                 const double * weight = approx->weight;
                 double * viol = xv->violation;
-                double value = 0;
-                for (size_t i = 0; i < nrows; i++) {
-                        double v = viol[i];
-                        double w = weight[i];
-                        value += .5*v*v/w;
+                if (OUT_value == NULL) {
+                        for (size_t i = 0; i < nrows; i++)
+                                scaled[i] = weight[i]*viol[i];
+                } else  {
+                        double value = 0;
+                        for (size_t i = 0; i < nrows; i++) {
+                                double v = viol[i];
+                                double w = weight[i];
+                                value += .5*w*v*v;
+                                scaled[i] = v*w;
+                        }
+                        *OUT_value = value;           
                 }
-                *OUT_value = value;                
         }
 
         assert(0 == sparse_matrix_multiply(OUT_grad->x, nvars,
                                            approx->matrix,
-                                           xv->violation, nrows,
+                                           scaled, nrows,
                                            1));
 
         {
@@ -433,13 +438,14 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
 {
         linterp(&state->y, state->theta,
                 &state->x, &state->z);
-        gradient(&state->g, approx, &state->y, NULL);
+        gradient(&state->g, approx, &state->violation, &state->y, NULL);
         step(&state->zp, state->theta,
              &state->g, &state->z,
              approx->lower, approx->upper,
              approx->inv_v);
 
-        gradient(&state->g, approx, &state->z, &state->value);
+        gradient(&state->g, approx, &state->violation,
+                 &state->z, &state->value);
         *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                         approx->lower, approx->upper);
 
@@ -546,7 +552,8 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
 
                 if ((i+1)%100 == 0) {
                         center = &state.x;
-                        gradient(&state.g, approx, &state.x, &value);
+                        gradient(&state.g, approx, &state.violation,
+                                 &state.x, &value);
                         pg = project_gradient_norm(&state.g, &state.x,
                                                    approx->lower, 
                                                    approx->upper);

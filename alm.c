@@ -235,7 +235,7 @@ static void update_precision(struct alm_state * state, alm_t alm,
 {
         size_t nrhs = alm->nrhs;
         double viol = norm_inf(violation, nrhs, NULL);
-        double w = norm_1(approx_weight(alm->approx), nrhs)/nrhs;
+        double w = nrhs/norm_1(approx_weight(alm->approx), nrhs);
         state->precision = fmin(state->precision,
                                 pow(fmin(viol, w), 1.5));
         state->precision = fmax(state->precision, 1e-6);
@@ -255,7 +255,7 @@ static int iter(struct alm_state * state, alm_t alm,
         double max_viol = norm_inf(state->violation, alm->nrhs, NULL);
         if (log != NULL)
                 fprintf(log, "%4zu: %12g %12g %.18g %.18g %.18g",
-                        k, 
+                        k,
                         max_viol,
                         norm_2(state->violation, alm->nrhs),
                         diag[2],

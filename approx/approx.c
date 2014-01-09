@@ -474,9 +474,9 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 restart = 0;
                 printf("\n");
         }
-        print_log(log, i+1, value, ng, pg, delta);
-        memcpy(x, center, n*sizeof(double));
+        print_log(log, i+1, value, ng, pg, HUGE_VAL);
 
+        memcpy(x, center, n*sizeof(double));
         if (OUT_diagnosis != NULL) {
                 OUT_diagnosis[0] = value;
                 OUT_diagnosis[1] = ng;

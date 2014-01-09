@@ -1,0 +1,463 @@
+\documentclass{article}
+\usepackage{fullpage}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\newcommand{\LeftEqNo}{\let\veqno\leqno}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{hyperref}
+\usepackage[square,sort&compress]{natbib}
+\title{A first-order augmented Lagrangian method for large LPs}
+\author{Paul Khuong}
+\begin{document}
+\maketitle
+\section{Introduction}
+\subsection{What}
+A parallel distributed solver for linear programs (LPs) and simple
+quadratic programs (QPs) (e.g., separable quadratics of the form
+\(\|x-x_0\|^2_2\) in the objective).
+
+\subsection{Why}
+The simplex algorithm is notoriously hard to parallelise: the state of
+the art exposes parallelisation opportunities by first pessimising
+serial performance, and regularly cause slowdowns compared to tuned
+serial code \citep{Hall:2010tr,Hall:2012he}.  Interior point methods
+(IPM) parallelise nicely, but suffer from fill-in during the
+computation of the normal matrix (\(A^tA\)) and of its Cholesky
+factorisation.  Moreover, their good performance depends on solving
+(heuristically) NP-hard graph partitioning problems.  IPMs also offer
+a fresh set of challenges when used within classic branch-and-bound or
+row and column generation frameworks\citep{Gondzio:2013to}:
+warm-starting IPMs is difficult \citep{Gondzio:1998ta,John:2007jm},
+and the methods do not converge to corner point solutions.
+
+Work on so-called matrix-free IPMs
+\citep{AlJeiroudi:2008td,Smith:2010wh}\footnote{More details on Jacek
+  Gondzio's homepage \url{http://www.maths.ed.ac.uk/~gondzio/}.}
+addresses only the issues of fill-in and of
+parallelisation/distribution. I think we're mostly surprised that
+iterative methods manage to solve the ill-conditioned linear systems
+inherent to IPMs.
+
+For example, my thesis revolves around solving large linear programs;
+practical instances comprise a few million variables and constraints.
+These LPs are sparse and easily fit in memory (a couple hundred MBs).
+However, the simplex method is too slow, and IPMs suffer from
+catastrophic fill-in (a couple dozen GBs).  We need some form of
+hybrid method: a parallelisable geometric method that benefits from
+warm starts and converges to corner point solutions.  When there are
+many optimal solutions, such a geometric method might produce
+solutions on the optimal subspace, but in the middle of that face
+rather than an arbitrary corner; this seems a priori interesting for
+column generation methods.
+
+\subsection{How}
+I propose to solve LPs and simple QPs with an augmented Lagrangian
+method.  Augmented Lagrangian methods are a form of Lagrangian
+relaxation in which the subproblem is augmented with a penalty term.
+
+This penalty term accelerates convergence, compared to the unaugmented
+subproblem.  For LPs and QPs, \citep{Delbos:2005tg} show how the outer
+loop (that updates Lagrange multipliers) converges \emph{linearly}
+(i.e., in \(\log(1/\epsilon)\) iterations) once the penalty term is
+important enough; the threshold is a constant that depends on the
+structure of each instance, but, once it is reached, the method will
+finish rapidly.  The penalty term also guarantees that, with optimal
+multipliers, an optimal solution to the relaxed subproblem is also a
+primal solution to the initial problem.
+
+We know that we can guarantee rapid convergence of the outer loop.  We
+must still solve (a few) augmented subproblems.  These subproblems are
+box-constrained least squares, and preliminary results show that
+APPROX \citep{Fercoq:2013wv} works well on such problems.  APPROX is
+an accelerated, parallel proximal first-order coordinate descent
+method.  Like all accelerated first-order methods for smooth
+optimisation, it guarantees that the distance from an optimal solution
+reduces as \(\mathcal{O}(1/k^2)\), where \(k\) is the iteration
+counter.  However, unlike gradient descent methods, it updates each
+coordinate independently, and thus copes better with ill-conditioned
+functions, e.g., functions with a wide range of Lipschitz constants
+for directional derivatives.  We will also show how a simple restart
+mechanism \citep{ODonoghue:2012wca} can improve convergence on
+strongly convex functions (e.g., after the identification of an active
+set of bound constraints); perhaps well enough to guarantee linear
+convergence in the subproblem as well.
+
+\subsection{Why not\ldots?}
+I already noted how difficult it is to parallelise the simplex
+algorithm, and that interior point methods don't scale to large
+instances.
+
+I explored a few first-order alternatives before settling on ALM +
+first-order LS solver.
+
+I was particularly interested in solving a smooth reformulation of the
+primal and dual optimality conditions \citep{Lan:2011tn}.  The
+reformulation reduces linear optimisation to primal and dual
+feasibility, with the constraint that the primal and dual solutions
+have the same value, and expresses this box-constrained linear system
+as a constrained underdetermined least squares fit.  The problem is
+that approximate primal and dual solutions conspire to be close to one
+another. We have no reliable upper or lower bound until the residual
+is very small.  At first, I solved this with an accelerated projected
+gradient method.  Like \citep{Lan:2011tn} reported, I rapidly obtained
+solutions with violations on the order of \(10^{-2}\); however, the
+solutions were useless until the violation reached \(10^{-8}\) or
+less.  I solved the same reformulation with APPROX
+\citep{Fercoq:2013wv}, the accelerated coordinate descent scheme that
+solves our ALM subproblems.  It fared a bit better, but, again, we had
+to meet stringent violation requirements before having useful values.
+
+I also tried Nesterov's smoothing scheme \citep{Nesterov:2005p2323}
+for saddle point problems of the form
+\[\min_x\max_y yAx + cx - yb.\]
+The inner smooth optimisation works well.  However, it must be
+executed very many times (or the smoothing term quickly weakened) to
+find a decent solution.
+
+Nemirovski proposed a proximal mirror method \citep{Nemirovski:2004tm}
+to directly solve such saddle point problems, without any smoothing.
+It worked well in terms of error, but, again, intermediate solutions
+were useless, without any reliable upper or lower bound.
+
+Alternating directions method of multipliers
+\citep{Eckstein:2012vb,Parikh:2013vb} is somewhat related to ALMs, but
+also to straight first-order methods; although some acceleration
+schemes exist \citep{Goldstein:2012vw}, it still suffers from really
+slow convergence to high-accuracy solutions.
+
+In the end, the ALM I describe here converges more quickly (after fewer
+iterations of the inner first-order method) to near-optimal solutions
+and offers useful lower estimates.
+
+\section{Augmented Lagrangian methods for linear programs}
+Let the initial linear program be
+\begin{equation}\LeftEqNo
+\label{form:P}\tag{P} \min_x cx
+\end{equation}
+subject to
+\begin{align}
+Ax &= b,\label{eqn:relaxed}\\
+l \leq x &\leq u,\notag
+\end{align} where \(l\in[-\infty,\infty)^n\) and
+\(u\in(-\infty,\infty]^n\).  We will relax constraint
+\eqref{eqn:relaxed}.
+
+The classic Lagrangian subproblem for this relaxation scheme is
+\begin{equation}\LeftEqNo
+\tag{S$(\lambda)$} \min_{l\leq x\leq u} cx - \lambda(Ax-b),
+\end{equation}
+which we can solve by inspection.  We can maximise the Lagrangian
+dual 
+\[\max_{\lambda} \mathrm{S}(\lambda)\]
+defined by this trivial subproblem and, at optimum, find a lower bound
+that matches the value of \eqref{form:P}.
+
+The problem is that \(\mathrm{S}(\lambda)\), the Lagrangian dual
+function, is non-smooth: it is convex and continuous, but piecewise
+linear.  Intuitively, each set of multipliers \(\lambda\) for which
+there are multiple optimal solutions (i.e., some row \((c-\lambda
+A)_i = 0\)) corresponds to a nondifferentiable point.  This
+multiplicity of solutions to the subproblem affects even optimal
+multipliers, although some subgradient schemes (e.g.,
+\citep{Barahona:2000we}) can nevertheless generate a primal feasible
+solution by averaging solutions to the subproblem.  The dominating
+issue is that we only have subgradients, not gradients.  Optimal
+(black box) subgradient methods can only converge at a rate of
+\(\mathcal{O}(1/\sqrt{k})\) \citep{Goffin:1977kq}; this is too slow
+except for coarsely approximated solutions.
+
+Smoothing methods \citep{Nesterov:2005p2323,Nesterov:2007uz} stabilise
+the subproblem as
+\[\min_{l\leq x\leq u} cx - \lambda(Ax-b) + \frac{\mu}{2} \|x-x_0\|^2,\]
+where \(\mu\geq 0\) and \(x_0\) is an arbitrary stabilisation center
+that is updated iteratively.  As \(\mu\) approaches zero and \(x_0\)
+an optimal solution, the influence of the centering term vanishes.
+When \(\mu>0\), this stabilised subproblem always has exactly one
+optimal solution for each vector of multipliers.  The dual function is
+thus smooth, and optimal accelerated gradient methods (AGM) converge
+at a rate of \(\mathcal{O}(1/k^2)\)
+\citep{Nesterov:1983vi,Nesterov:2007wm,Gonzaga:2008wc}.  However, the
+stabilisation center must be updated until an optimal solution is
+found; that outer loop, combined with the inner AGM, converges as
+\(\mathcal{O}(1/k)\).  In practice, there are also numerical issues:
+as \(\mu\) becomes smaller, the Lipschitz constant of the (smoothed)
+dual's derivative grows, and the inner loop progresses slowly.
+Nevertheless, the scheme is attractive for its relative simplicity,
+and because the unicity of subproblem solutions means that it
+naturally generates a primal solution.
+
+\citep{Becker:2011wg} shines an interesting light on the adjustment of
+\(x_0\): we can see the inner AGM as solving a proximal subproblem in
+a first-order method.  This leads to acceleration schemes when
+adjusting the center, but also helps explain why there must be so many
+outer iterations: the outer loop is a first-order proximal method!
+
+Augmented Lagrangian methods \citep{Nocedal:2006uv} instead add a
+penalty term to the subproblem:
+\begin{equation}\LeftEqNo
+\tag{AS$(\lambda)$} \min_{l\leq x\leq u} cx - \lambda(Ax-b) +
+\frac{\mu}{2}\|Ax-b\|_2^2,
+\end{equation}
+where \(\mu>0\).
+
+This is still a valid relaxation: feasible solutions of \eqref{form:P}
+satisfy \(Ax=b\), and both the Lagrangian and the penalty term then
+have no effect.  The penalty term doesn't guarantee unicity of optimal
+solutions: \eqref{form:P} could have multiple optimal solutions, and
+\(Ax=b\) is typically underdetermined.  However, it smoothens the dual
+function (subgradients for all optimal solutions, i.e., violation
+vectors \(Ax-b\), happen to be equal) and ensures that solutions to
+the subproblem approach an optimal solution of \eqref{form:P}, as well
+as enabling a linearly convergent multiplier update scheme (without
+making \(\mu\) grow unboundedly).
+
+\section{APPROX for box-constrained least squares}
+In this section, I describe a specialisation of APPROX
+\citep{Fercoq:2013wv} for box-constrained least squares problems,
+i.e.,
+\begin{equation}\LeftEqNo
+\tag{BLS}\label{form:BLS}\min_{l\leq x\leq u} cx + \frac{1}{2}\|Ax-b\|_2^2,
+\end{equation}
+where, again, \(l\) and \(u\) are vectors of extended reals.
+
+APPROX is a block coordinate descent scheme with a handful of
+parameters, but I specialise it for \(l_2\) norms and regular
+euclidian inner products, to consider each coordinate \(x_i\)
+individually, and to always update all of them simultaneously.
+
+In that setting, the strength of APPROX is that it considers the
+Lipschitz constant and density of each row \(A_j\) independently,
+rather than applying the worst case to all coordinates and rows.
+
+For each row \(A_j\), let \(\beta_j\) be the number of nonzeros in
+that row.  The step size for each coordinate \(x_i\) is then determined
+by (the inverse of)
+\[v_i = \sum_{j=1}^m \beta_j(A_{ji})^2.\] This value is lower when a
+variable appears in fewer constraints, interact with fewer variables,
+and is associated with small coefficients: directional derivatives for
+such variables are accurate over longer ranges.  Given these values,
+Algorithm 1 implements my simplification of APPROX.
+
+\begin{algorithm}[h]
+\caption{APPROX for (semi)box-constrained least squares}
+\begin{algorithmic}
+\STATE{Choose \(l\leq x_0\leq u\), and let \(z_0 = x_0\),
+  \(\theta_0=1\) and \(k=0\)}
+\REPEAT
+\STATE{\(y_k = (1-\theta_k)x_k+\theta_k z_k\)}
+\STATE{\(\nabla = A^t(Ay_k -b)\)}
+\STATE{Compute \(z_{k+1}\) as the proximal mapping for \(\nabla\) and \(z_k\)}
+\STATE{\(x_{k+1} = y_k + \theta_k(z_{k+1}-z_k)\)}
+\STATE{\(\theta_{k+1} = \frac{\sqrt{\theta_k^4+4\theta_k^2}-\theta_k^2}{2}\)}
+\STATE{Increment \(k\) by 1}
+\UNTIL{stopping condition satisfied}
+\RETURN{\(x_k\)}
+\end{algorithmic}
+\end{algorithm}
+
+The heart of APPROX is the \emph{coordinate-wise} fixed-step proximal
+mapping scheme
+\[z^{(i)}_{k+1} = \mathop{\arg\min}_{l_i\leq z \leq u_i}\,
+\left([c+A^t(A y_k-b)]_i z + \frac{\theta_k v_i}{2}\|z -
+  z^{(i)}_k\|_2^2\right),\quad\forall\, 0 \leq i < n,\]
+where \(\theta_k\) is an acceleration (momentum) parameter.
+
+The first term, \[\nabla_i = [c+A^t(A y_k-b)]_i\] is the directional derivative
+for the objective function at \(y_k\); the proximal center is \(z_k\)
+rather than \(y_k\), but \(y_k\) is an extrapolation from previous
+values of \(z\).
+
+\(\theta_k\) and \(v_i\) are never negative, and this is thus a
+projection on (a subrange of) the real line.  If \(v_i = 0\), the
+proximal term disappears, and we are left with a pure gradient step:
+\[z^{(i)}_{k+1}=\begin{cases}
+              l & \textrm{ if } \nabla_i > 0,\\
+              z^{(i)}_{k} & \textrm{ if } \nabla_i = 0,\\
+              u & \textrm{ if } \nabla_i < 0.
+             \end{cases}\]
+If \(z^{(i)}_{k+1}\in\{-\infty,\infty\}\), we then conclude that the
+problem is unbounded.  This can only happen if a variable \(x_i\) is
+such that \(c_i\neq 0\) but \(x_i\) appears in no least squares term.
+
+Otherwise, the quadratic is minimised in
+\[z^* = z^{(i)}_k - \frac{\nabla_i}{\theta_k v_i},\]
+and
+\[z^{(i)}_{k+1}=\begin{cases}
+             l_i & \textrm{ if } z^* < l_i,\\
+             z^* &\textrm{ if } z^*\in [l_i, u_i],\\
+             u_i &\textrm{ if } z^* > u_i.
+             \end{cases}\]
+
+I implemented the simple version of APPROX with full-dimensional
+vector operations.  \citep{Fercoq:2013wv} do not suggest any stopping
+condition; I reuse a classic condition from projected gradient
+methods.  Let
+\[g_k = (c+A^t(Ax_k-b))\]
+be the derivative at \(x_k\), and let
+\[\tilde{g}_k = \Pi_{[l,u]}(x_k-g_k)-x_k,\]
+where \(\Pi_{[l,u]}\) projects its argument to the closest
+\(\tilde{g}_k\in [l, u]\) (i.e., an elementwise clamping in
+\([l_i,u_i]\)).  I stop the loop whenever
+\(\|\tilde{g}_k\|_2<\omega\).  For unconstrained problems, or when
+\(x_k\) is far from its bounds, \(g_k = \tilde{g}_k\), and we are
+testing for gradient magnitude; otherwise, we disregard components of
+\(g_k\) that push -- a minimisation step subtracts the gradient -- \(x_k\)
+toward (nearly) active bounds.  This criterion incurs one additional
+gradient evaluation per iteration; a high performance implementation
+will likely benefit from a cleverer condition or relatively infrequent
+tests.
+
+Accelerated schemes suffer on strongly convex functions, compared to
+unaccelerated gradient descent: the extrapolation step overshoots, and
+the methods no longer reduce the objective value monotonously.
+\citep{ODonoghue:2012wca} propose a simple scheme to recover linear
+convergence on (locally) strongly convex functions.  Whenever the step
+\((z_{k+1}-z_k)\) is not a descent direction for \(z_k\), i.e., if 
+\[(A^t(Az_k -b))^t(z_{k+1}-z_k)>0,\]
+we reset the acceleration:
+\(x_{k+1} = z_{k+1} = z_k\) and \(\theta_{k+1} = 1\).  Later
+experiments \citep{Lin:2013wi} showed that this family of adaptive
+restart only works well on quadratics, but that is exactly what we are
+minimising.  Sadly, this test also means that we need an additional
+gradient evaluation.  I reduce that overhead by instead computing
+\(\tilde{g}_k\) with respect to \(z_{k-1}\) (i.e., the same derivative
+\(A^t(Az_{k-1}-b)\) and projecting away from \(z_{k-1}\)).
+
+That is how I obtain
+\begin{algorithm}[h]
+\caption{Adaptively restarted APPROX for (semi)box-constrained least squares}
+\begin{algorithmic}
+\STATE{Choose \(l\leq x_0\leq u\), and let \(z_0 = x_0\),
+  \(\theta_0=1\) and \(k=0\)}
+\REPEAT
+ \STATE{\(y_k = (1-\theta_k)x_k+\theta_k z_k\)}
+ \STATE{\(\nabla = A^t(Ay_k -b)\)}
+ \STATE{Compute \(z\) as the proximal mapping for \(\nabla\) and \(z_k\)}
+ \IF{\((A^t(Az_k -b))^t(z-z_k)> 0\)}
+  \STATE{\(x_{k+1} = z_{k+1} = z_k\) }\COMMENT{oscillation started $\Rightarrow$ restart}
+  \STATE{\(\theta_{k+1} = 1\)}
+ \ELSE
+  \STATE{\(z_{k+1} = z\)}
+  \STATE{\(x_{k+1} = y_k + \theta_k(z_{k+1}-z_k)\)}
+  \STATE{\(\theta_{k+1} = \frac{\sqrt{\theta_k^4+4\theta_k^2}-\theta_k^2}{2}\)}
+ \ENDIF
+ \STATE{Increment \(k\) by 1}
+ \UNTIL{\(\|\tilde{g}_{k-1}\|<\omega\) }\COMMENT{with respect to \(z_{k-1}\)}
+\RETURN{\(x_k\)}
+\end{algorithmic}
+\end{algorithm}
+
+To write: In theory, \(x\) converges to a solution. I sometimes (every
+100 iterations) look at \(x\) and the derivative in \(x\) instead of
+\(z\).  There can also be numerical issues when the penalty factor
+becomes high; I abort early if we fail to make any change after 10000
+iterations.
+
+\section{Linearly convergent augmented Lagrangian method}
+The theory of augmented Lagrangian methods (ALMs) mostly settled in
+the 1970s.  The gist of it is that ALMs are preferable to pure
+penalty methods because they can converge without pushing the penalty
+factor \(\mu\) toward \(\infty\).  The downside is that, without a
+constant growth in \(\mu\), this convergence is slow: the error
+decreases as \(\mathcal{O}(1/k)\) \citep{Nocedal:2006uv}.
+\citep{He:2010vb} cast the multiplier adjustment scheme as a
+first-order method and show how to accelerate it to obtain a quicker
+decrease, in \(\mathcal{O}(1/k^2)\)\ldots although their work is eerily
+similar to \citep{Guler:1992tg}.
+
+In our case, \citep{Delbos:2005tg} did even better: they show that
+ALMs converge linearly (i.e., after \(\log(\delta_0/\epsilon)\)
+iterations, where \(\delta_0\) is the distance between the initial
+solution and an optimal one) for LPs and QPs, as soon as \(\mu>L\),
+where \(L\) is the Lipschitz constant for the derivative of the
+Lagrangian dual.  In the general case, it is difficult to evaluate
+this constant, but we can lower bound \(L\) dynamically.
+
+Let \(r_{k} = Ax_k-b\) be the residual for the optimal solution to
+the augmented subproblem at iteration \(k\).  We wish for
+\[\rho_k = \frac{\|r_k\|}{\|r_{k-1}\|}\]
+to always be at most \(\rho_{\textrm{goal}}\), e.g.,
+\(\rho_{\textrm{goal}} = 1/2\).
+
+If \(\rho_k\leq \rho_{\textrm{goal}}\), \(\mu\) stays the same.
+Otherwise, \(\mu\) must grow; I do (almost) as \citep{Delbos:2005tg}
+suggests and then multiply \(\mu\) by
+\(\min\{1,\rho_k\}/\rho_{\textrm{goal}}\).
+
+Practical implementations of ALMs must also determine how precisely
+each subproblem must be solved.  We take inspiration from
+\citep{Nocedal:2006uv} and solve the subproblem with
+\(\omega=\min\{1/\mu,\epsilon^*\}\), where \(\epsilon^* =
+\min_k\|r_k\|_\infty\) (for all subproblems solved so far).  This
+second value helps avoid situation where the solution is very nearly
+feasible, but far from optimal.
+
+This gives our outer augmented Lagrangian loop with linear convergence
+(Algorithm 3).  The precision constant \(10^{-5}\), the residual
+(\(r_k\)) reduction goal \(\frac{1}{2}\) and the growth factor 2 (for
+\(\mu\)) are arbitrary; so is the growth strategy when \(r_k\) is too
+high.  If warm starts are available, it will be useful to initialise
+\(x_0\) and \(\lambda_1\) with better solutions.
+
+\begin{algorithm}[h]
+\caption{Linearly convergent augmented Lagrangian for LPs}
+\begin{algorithmic}
+\STATE{Let \(x_0\in[l,u]\), \(r_0=\infty\), \(\lambda_1 = 0\), \(\mu_1 = 1\),
+  \(\omega_1 = 1\) and \(k=1\)}
+\REPEAT
+\STATE{\(x_{k} = \mathop{\arg\min}_{l\leq x\leq u} cx -
+  \lambda_k(Ax-b) + \frac{\mu_k}{2}\|Ax-b\|_2^2\) }\COMMENT{with APPROX until \(\|\tilde{g}\|_2<\omega_k\), from \(x_{k-1}\)}
+\STATE{\(r_k = Ax_k-b\)}
+\STATE{\(\lambda_{k+1}=\lambda_k-\mu_kr_k\)}
+\IF{\(r_k>\frac{1}{2}r_{k-1}\)}
+  \STATE{\(\mu_{k+1}=2\mu_k\min\{1,r_k/r_{k-1}\}\) }\COMMENT{insufficient
+  improvement}
+\ELSE
+  \STATE{\(\mu_{k+1}=\mu_k\) }\COMMENT{looks like we're in the linear
+    convergence regime!}
+\ENDIF
+\STATE{\(\omega_{k+1}=\max\{10^{-5},\min\{\omega_k,1/\mu_{k+1},\|r_k\|_\infty\}\}\)}
+\STATE{increment \(k\) by 1}
+\UNTIL{\(\|r_{k-1}\|_\infty<10^{-5}\) and \(\|\tilde{g}\|_2<10^{-5}\)}
+\RETURN{\(x_{k-1}\) and \(\lambda_k\)}
+\end{algorithmic}
+\end{algorithm}
+
+In some cases, we can deduce a range on optimal multipliers for a
+given contraints.  For example, if a constraint \(A_j x = b_j\)
+actually corresponds to a \(\geq\) constraint (+ slack variable), the
+dual multiplier for this constraint is nonnegative.  We can trivially
+project \(\lambda_{k+1}\) elementwise into hemiboxes after each
+update.  This is not necessary, but can't hurt.
+
+\section{To do}
+Not in any logical order.
+
+\begin{enumerate}
+\item Rewrite APPROX in C(++) for embeddability.
+\item Parse MPS in C.
+\item Look into Z-ordering for cache-oblivious sparse matrix-vector
+  multiplication.
+\item Parallelise this multiplication.
+\item Parallelise coordinate updates.
+\item Play with parameter update schemes in the ALM; for example, is
+  it useful to fix \(\omega=10^{-5}\)?
+\item Look into scaling schemes for the constraint matrix.
+\item Find smarter stopping conditions for APPROX: e.g., we could try
+  and exploit KKT optimality conditions.
+\item Look at the stopping conditions in \citep{Guler:1992tg}.
+\item Is it useful to update \(\mu\) independently for each
+  constraint?
+\item Automated test/benchmark harness with netlib, then large LPs
+  (e.g., CT scan instance sets).
+\item Accelerate APPROX with a SESOP step? Optimise over span of a few
+  key vectors that include the gradient and the APPROX step (CG-like).
+\item Keep a pedagogical version somewhere.
+\end{enumerate}
+
+\bibliographystyle{abbrvnat}
+\bibliography{all}
+
+\end{document}
+

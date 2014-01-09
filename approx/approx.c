@@ -320,14 +320,14 @@ static void project(struct vector * xv,
 
 static void step(struct vector * zpv, double theta,
                  const struct vector * gv, const struct vector * zv,
-                 const double * lower, const double * upper,
-                 const double * inv_v)
+                 const double * restrict lower, const double * restrict upper,
+                 const double * restrict inv_v)
 {
         size_t n = zpv->n;
         assert(gv->n == n);
         assert(zv->n == n);
-        double * zp = zpv->x;
-        const double * g = gv->x, * z = zv->x;
+        double * restrict zp = zpv->x;
+        const double * restrict g = gv->x, * restrict z = zv->x;
         double max_z = 0;
         double inv_theta = (1-1e-6)/theta; /* protect vs rounding */
         for (size_t i = 0; i < n; i++) {   /* errors. */

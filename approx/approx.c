@@ -419,15 +419,15 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         for (i = 0; i < niter; i++) {
                 delta = HUGE_VAL;
                 center = iter(approx, &state, &pg);
-                /* if (center == state.x) { */
-                /*         if (!restart) { */
-                /*                 restart = 1; */
-                /*                 if (log != NULL) */
-                /*                         fprintf(log, "\t\t"); */
-                /*         } */
-                /*         if (log != NULL) */
-                /*                 fprintf(log, "R"); */
-                /* } */
+                if (center == state.x) {
+                        if (!restart) {
+                                restart = 1;
+                                if (log != NULL)
+                                        fprintf(log, "\t\t");
+                        }
+                        if (log != NULL)
+                                fprintf(log, "R");
+                }
                 ng = norm_2(state.g, n);
                 value = state.value;
                 if (value < max_value) {
@@ -477,7 +477,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 restart = 0;
                 printf("\n");
         }
-        print_log(log, i+1, value+offset, ng, pg, HUGE_VAL);
+        print_log(log, i+1, value+offset, ng, pg, delta);
 
         memcpy(x, center, n*sizeof(double));
         if (OUT_diagnosis != NULL) {

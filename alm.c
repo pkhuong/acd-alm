@@ -296,7 +296,9 @@ int alm_solve(alm_t alm, size_t niter, double * x, size_t nvars,
         for (size_t i = 0; i < niter; i++) {
                 int status = iter(&state, alm, x, lambda, log, i+1,
                                   &pg, &max_viol);
-                if ((status == 0) && (max_viol < 1e-5)) {
+                if ((max_viol < 1e-5)
+                    && ((status != 2) /* 2: pg is small enough */
+                        || (pg < 1e-6))) {
                         ret = 0;
                         break;
                 }

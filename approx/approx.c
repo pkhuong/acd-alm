@@ -216,8 +216,8 @@ static void step(double * zp, size_t n, double theta,
                  const double * lower, const double * upper,
                  const double * inv_v)
 {
-        double inv_theta = 1/theta;
-        for (size_t i = 0; i < n; i++) {
+        double inv_theta = (1-1e-6)/theta; /* protect vs rounding */
+        for (size_t i = 0; i < n; i++) {   /* errors. */
                 double gi = g[i], zi = z[i],
                         li = lower[i], ui = upper[i],
                         inv_vi = inv_v[i];

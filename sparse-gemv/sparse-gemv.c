@@ -22,7 +22,7 @@ struct crs
 };
 
 #ifndef PREFETCH_DISTANCE
-# define PREFETCH_DISTANCE (16)
+# define PREFETCH_DISTANCE 0
 #endif
 
 static int init_crs(struct crs * crs, size_t nrows, size_t nnz)

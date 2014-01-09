@@ -139,27 +139,27 @@ struct vector {
 };
 
 /* y <- (1-theta)x + theta z */
-static void linterp(struct vector * OUT_yp, double theta,
-                    const struct vector * xp, const struct vector * zp)
+static void linterp(struct vector * OUT_yv, double theta,
+                    const struct vector * xv, const struct vector * zv)
 {
         assert(theta >= 0);
         assert(theta <= 1);
         double scale = 1-theta;
-        size_t nvars = OUT_yp->n;
-        assert(xp->n == nvars);
-        assert(zp->n == nvars);
+        size_t nvars = OUT_yv->n;
+        assert(xv->n == nvars);
+        assert(zv->n == nvars);
 
-        double * OUT_y = OUT_yp->x;
-        const double * x = xp->x, * z = zp->x;
+        double * OUT_y = OUT_yv->x;
+        const double * x = xv->x, * z = zv->x;
 
         for (size_t i = 0; i < nvars; i++)
                 OUT_y[i] = scale*x[i]+theta*z[i];
 }
 
-static double dot(const double * x, const struct vector * yp)
+static double dot(const double * x, const struct vector * yv)
 {
-        size_t n = yp->n;
-        const double * y = yp->x;
+        size_t n = yv->n;
+        const double * y = yv->x;
         double acc = 0;
         for (size_t i = 0; i < n; i++)
                 acc += x[i]*y[i];
@@ -169,15 +169,15 @@ static double dot(const double * x, const struct vector * yp)
 static void gradient(struct vector * OUT_grad,
                      struct vector * OUT_violation,
                      approx_t approx,
-                     const struct vector * xp, double * OUT_value)
+                     const struct vector * xv, double * OUT_value)
 {
         size_t nvars = OUT_grad->n,
                 nrows = OUT_violation->n;
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
-        assert(nvars == xp->n);
+        assert(nvars == xv->n);
         assert(0 == sparse_matrix_multiply(OUT_violation->x, nrows,
-                                           approx->matrix, xp->x, nvars, 0));
+                                           approx->matrix, xv->x, nvars, 0));
 
         {
                 const double * rhs = approx->rhs,
@@ -213,7 +213,7 @@ static void gradient(struct vector * OUT_grad,
         }
 
         if (OUT_value != NULL)
-                *OUT_value += dot(approx->linear, xp);
+                *OUT_value += dot(approx->linear, xv);
 }
 
 static inline double min(double x, double y)
@@ -226,11 +226,11 @@ static inline double max(double x, double y)
         return (x>y)?x:y;
 }
 
-static void project(struct vector * xp,
+static void project(struct vector * xv,
                     const double * lower, const double * upper)
 {
-        size_t n = xp->n;
-        double * x = xp->x;
+        size_t n = xv->n;
+        double * x = xv->x;
         for (size_t i = 0; i < n; i++)
                 x[i] = min(max(lower[i], x[i]), upper[i]);
 }

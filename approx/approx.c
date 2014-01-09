@@ -135,8 +135,56 @@ int approx_update_step_sizes(approx_t approx)
 
 struct vector {
         double * x;
+        double * violation; /* scaled Ax-b */
         size_t n;
+        size_t nviolation;
+        int violationp;
 };
+
+static void init_vector(struct vector * x, size_t n, size_t nviolation)
+{
+        x->n = n;
+        x->x = calloc(n, sizeof(double));
+        if (nviolation) {
+                x->violation = calloc(nviolation, sizeof(double));
+                x->nviolation = nviolation;
+        } else {
+                x->violation = NULL;
+                x->nviolation = 0;
+        }
+        x->violationp = 0;
+}
+
+static void copy_vector(struct vector * x, const struct vector * y)
+{
+        size_t n = x->n;
+        assert(n == y->n);
+        memcpy(x->x, y->x, n*sizeof(double));
+        if (y->violationp
+            && (y->violation != NULL)
+            && (x->violation != NULL)) {
+                size_t m = x->nviolation;
+                assert(m == y->nviolation);
+                memcpy(x->violation, y->violation, m*sizeof(double));
+        }
+}
+
+static void project(struct vector * xv,
+                    const double * lower, const double * upper);
+
+static void set_vector(struct vector * x, const double * src,
+                       approx_t approx)
+{
+        memcpy(x->x, src, x->n*sizeof(double));
+        project(x, approx->lower, approx->upper);
+}
+
+static void destroy_vector(struct vector * x)
+{
+        free(x->x);
+        free(x->violation);
+        memset(x, 0, sizeof(struct vector));
+}
 
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,
@@ -324,44 +372,18 @@ struct approx_state
         double value;
 };
 
-static void init_vector(struct vector * x, size_t n)
-{
-        x->n = n;
-        x->x = calloc(n, sizeof(double));
-}
-
-static void copy_vector(struct vector * x, const struct vector * y)
-{
-        size_t n = x->n;
-        assert(n == y->n);
-        memcpy(x->x, y->x, n*sizeof(double));
-}
-
-static void set_vector(struct vector * x, const double * src,
-                       approx_t approx)
-{
-        memcpy(x->x, src, x->n*sizeof(double));
-        project(x, approx->lower, approx->upper);        
-}
-
-static void destroy_vector(struct vector * x)
-{
-        free(x->x);
-        memset(x, 0, sizeof(struct vector));
-}
-
 static void init_state(struct approx_state * state,
                        size_t nvars, size_t nrows)
 {
-        init_vector(&state->y, nvars);
-        init_vector(&state->z, nvars);
-        init_vector(&state->zp, nvars);
-        init_vector(&state->x, nvars);
+        init_vector(&state->y, nvars, nrows);
+        init_vector(&state->z, nvars, nrows);
+        init_vector(&state->zp, nvars, nrows);
+        init_vector(&state->x, nvars, nrows);
 
         state->theta = 1;
 
-        init_vector(&state->g, nvars);
-        init_vector(&state->violation, nrows);
+        init_vector(&state->g, nvars, 0);
+        init_vector(&state->violation, nrows, 0);
         state->value = HUGE_VAL;
 }
 

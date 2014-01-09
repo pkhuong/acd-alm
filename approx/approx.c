@@ -133,9 +133,12 @@ int approx_update_step_sizes(approx_t approx)
         return 0;
 }
 
-static void extrapolate_y(double * OUT_y, size_t nvars, double theta,
-                        const double * x, const double * z)
+/* y <- (1-theta)x + theta z */
+static void linterp(double * OUT_y, size_t nvars, double theta,
+                    const double * x, const double * z)
 {
+        assert(theta >= 0);
+        assert(theta <= 1);
         double scale = 1-theta;
         for (size_t i = 0; i < nvars; i++)
                 OUT_y[i] = scale*x[i]+theta*z[i];
@@ -240,14 +243,6 @@ static void step(double * zp, size_t n, double theta,
         }
 }
 
-static void extrapolate_x(double * OUT_x, size_t n, double theta,
-                          const double * y,
-                          const double * z, const double * zp)
-{
-        for (size_t i = 0; i < n; i++)
-                OUT_x[i] = y[i] + theta*(zp[i]-z[i]);
-}
-
 static double next_theta(double theta)
 {
         double theta2 = theta*theta,
@@ -324,8 +319,8 @@ static void destroy_state(struct approx_state * state)
 static double * iter(approx_t approx, struct approx_state * state,
                      double * OUT_pg)
 {
-        extrapolate_y(state->y, approx->nvars, state->theta,
-                      state->x, state->z);
+        linterp(state->y, approx->nvars, state->theta,
+                state->x, state->z);
         gradient(state->g, approx->nvars,
                  state->violation, approx->nrhs,
                  approx, state->y, NULL);
@@ -348,9 +343,8 @@ static double * iter(approx_t approx, struct approx_state * state,
                 return state->x;
         }
 
-        extrapolate_x(state->x, approx->nvars, state->theta,
-                      state->y,
-                      state->z, state->zp);
+        linterp(state->x, approx->nvars, state->theta,
+                state->x, state->zp);
         state->theta = next_theta(state->theta);
         {
                 /* swap */

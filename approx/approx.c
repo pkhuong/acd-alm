@@ -133,68 +133,87 @@ int approx_update_step_sizes(approx_t approx)
         return 0;
 }
 
+struct vector {
+        double * x;
+        size_t n;
+};
+
 /* y <- (1-theta)x + theta z */
-static void linterp(double * OUT_y, size_t nvars, double theta,
-                    const double * x, const double * z)
+static void linterp(struct vector * OUT_yp, double theta,
+                    const struct vector * xp, const struct vector * zp)
 {
         assert(theta >= 0);
         assert(theta <= 1);
         double scale = 1-theta;
+        size_t nvars = OUT_yp->n;
+        assert(xp->n == nvars);
+        assert(zp->n == nvars);
+
+        double * OUT_y = OUT_yp->x;
+        const double * x = xp->x, * z = zp->x;
+
         for (size_t i = 0; i < nvars; i++)
                 OUT_y[i] = scale*x[i]+theta*z[i];
 }
 
-static double dot(const double * x, const double * y, size_t n)
+static double dot(const double * x, const struct vector * yp)
 {
+        size_t n = yp->n;
+        const double * y = yp->x;
         double acc = 0;
         for (size_t i = 0; i < n; i++)
                 acc += x[i]*y[i];
         return acc;
 }
 
-static void gradient(double * OUT_grad, size_t nvars,
-                     double * OUT_violation, size_t nrows, /* scaled */
+static void gradient(struct vector * OUT_grad,
+                     struct vector * OUT_violation,
                      approx_t approx,
-                     const double * x, double * OUT_value)
+                     const struct vector * xp, double * OUT_value)
 {
+        size_t nvars = OUT_grad->n,
+                nrows = OUT_violation->n;
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
-        assert(0 == sparse_matrix_multiply(OUT_violation, nrows,
-                                           approx->matrix, x, nvars, 0));
+        assert(nvars == xp->n);
+        assert(0 == sparse_matrix_multiply(OUT_violation->x, nrows,
+                                           approx->matrix, xp->x, nvars, 0));
 
         {
                 const double * rhs = approx->rhs,
                         * weight = approx->weight;
+                double * viol = OUT_violation->x;
                 if (OUT_value != NULL) {
                         double value = 0;
                         for (size_t i = 0; i < nrows; i++) {
-                                double v = OUT_violation[i] - rhs[i];
+                                double v = viol[i] - rhs[i];
                                 double w = weight[i];
                                 value += .5*w*v*v;
-                                OUT_violation[i] = v*w;
+                                viol[i] = v*w;
                         }
                         *OUT_value = value;
                 } else {
                         for (size_t i = 0; i < nrows; i++) {
-                                double v = OUT_violation[i] - rhs[i];
-                                OUT_violation[i] = v*weight[i];
+                                double v = viol[i] - rhs[i];
+                                viol[i] = v*weight[i];
                         }
                 }
         }
 
-        assert(0 == sparse_matrix_multiply(OUT_grad, nvars,
+        assert(0 == sparse_matrix_multiply(OUT_grad->x, nvars,
                                            approx->matrix,
-                                           OUT_violation, nrows,
+                                           OUT_violation->x, nrows,
                                            1));
 
         {
+                double * grad = OUT_grad->x;
                 const double * linear = approx->linear;
                 for (size_t i = 0; i < nvars; i++)
-                        OUT_grad[i] += linear[i];
+                        grad[i] += linear[i];
         }
 
         if (OUT_value != NULL)
-                *OUT_value += dot(approx->linear, x, nvars);
+                *OUT_value += dot(approx->linear, xp);
 }
 
 static inline double min(double x, double y)
@@ -207,9 +226,11 @@ static inline double max(double x, double y)
         return (x>y)?x:y;
 }
 
-static void project(double * x, size_t n,
+static void project(struct vector * xp,
                     const double * lower, const double * upper)
 {
+        size_t n = xp->n;
+        double * x = xp->x;
         for (size_t i = 0; i < n; i++)
                 x[i] = min(max(lower[i], x[i]), upper[i]);
 }
@@ -277,41 +298,53 @@ static double project_gradient_norm(const double * g, const double * x,
 
 struct approx_state
 {
-        double * y;
-        double * z;
-        double * zp;
-        double * x;
+        struct vector y;
+        struct vector z;
+        struct vector zp;
+        struct vector x;
 
         double theta;
 
-        double * g;
-        double * violation;
+        struct vector g;
+        struct vector violation;
         double value;
 };
+
+static void init_vector(struct vector * x, size_t n)
+{
+        x->n = n;
+        x->x = calloc(n, sizeof(double));
+}
+
+static void destroy_vector(struct vector * x)
+{
+        free(x->x);
+        memset(x, 0, sizeof(struct vector));
+}
 
 static void init_state(struct approx_state * state,
                        size_t nvars, size_t nrows)
 {
-        state->y = calloc(nvars, sizeof(double));
-        state->z = calloc(nvars, sizeof(double));
-        state->zp = calloc(nvars, sizeof(double));
-        state->x = calloc(nvars, sizeof(double));
+        init_vector(&state->y, nvars);
+        init_vector(&state->z, nvars);
+        init_vector(&state->zp, nvars);
+        init_vector(&state->x, nvars);
 
         state->theta = 1;
 
-        state->g = calloc(nvars, sizeof(double));
-        state->violation = calloc(nrows, sizeof(double));
+        init_vector(&state->g, nvars);
+        init_vector(&state->violation, nrows);
         state->value = HUGE_VAL;
 }
 
 static void destroy_state(struct approx_state * state)
 {
-        free(state->y);
-        free(state->z);
-        free(state->zp);
-        free(state->x);
-        free(state->g);
-        free(state->violation);
+        destroy_vector(&state->y);
+        destroy_vector(&state->z);
+        destroy_vector(&state->zp);
+        destroy_vector(&state->x);
+        destroy_vector(&state->g);
+        destroy_vector(&state->violation);
 
         memset(state, 0, sizeof(struct approx_state));
 }
@@ -319,41 +352,40 @@ static void destroy_state(struct approx_state * state)
 static double * iter(approx_t approx, struct approx_state * state,
                      double * OUT_pg)
 {
-        linterp(state->y, approx->nvars, state->theta,
-                state->x, state->z);
-        gradient(state->g, approx->nvars,
-                 state->violation, approx->nrhs,
-                 approx, state->y, NULL);
-        step(state->zp, approx->nvars, state->theta,
-             state->g, state->z,
+        linterp(&state->y, state->theta,
+                &state->x, &state->z);
+        gradient(&state->g, &state->violation,
+                 approx, &state->y, NULL);
+        step(state->zp.x, approx->nvars, state->theta,
+             state->g.x, state->z.x,
              approx->lower, approx->upper,
              approx->inv_v);
 
-        gradient(state->g, approx->nvars, state->violation, approx->nrhs,
-                 approx, state->z, &state->value);
-        *OUT_pg = project_gradient_norm(state->g, state->z,
+        gradient(&state->g, &state->violation,
+                 approx, &state->z, &state->value);
+        *OUT_pg = project_gradient_norm(state->g.x, state->z.x,
                                         approx->nvars,
                                         approx->lower, approx->upper);
 
-        if (dot_diff(state->g, state->z, state->zp, approx->nvars) > 0) {
+        if (dot_diff(state->g.x, state->z.x, state->zp.x, approx->nvars) > 0) {
                 /* Oscillation */
                 size_t total = approx->nvars*sizeof(double);
-                memcpy(state->x, state->z, total);
+                memcpy(state->x.x, state->z.x, total);
                 state->theta = 1;
-                return state->x;
+                return state->x.x;
         }
 
-        linterp(state->x, approx->nvars, state->theta,
-                state->x, state->zp);
+        linterp(&state->x, state->theta,
+                &state->x, &state->zp);
         state->theta = next_theta(state->theta);
         {
                 /* swap */
-                double * temp = state->z;
+                struct vector temp = state->z;
                 state->z = state->zp;
                 state->zp = temp;
         }
 
-        return state->zp;
+        return state->zp.x;
 }
 
 static double diff(const double * x, const double * y, size_t n)
@@ -397,14 +429,14 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
 
         struct approx_state state;
         init_state(&state, approx->nvars, approx->nrhs);
-        memcpy(state.x, x, n*sizeof(double));
-        project(state.x, n, approx->lower, approx->upper);
-        memcpy(state.z, state.x, n*sizeof(double));
+        memcpy(state.x.x, x, n*sizeof(double));
+        project(&state.x, approx->lower, approx->upper);
+        memcpy(state.z.x, state.x.x, n*sizeof(double));
 
         double * prev_x = calloc(n, sizeof(double));
-        memcpy(prev_x, state.x, n*sizeof(double));
+        memcpy(prev_x, state.x.x, n*sizeof(double));
 
-        const double * center = state.x;
+        const double * center = state.x.x;
         double value = state.value;
         double ng = HUGE_VAL, pg = HUGE_VAL;
         double delta = HUGE_VAL;
@@ -413,7 +445,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         for (i = 0; i < niter; i++) {
                 delta = HUGE_VAL;
                 center = iter(approx, &state, &pg);
-                if (center == state.x) {
+                if (center == state.x.x) {
                         if (!restart) {
                                 restart = 1;
                                 if (log != NULL)
@@ -422,7 +454,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         if (log != NULL)
                                 fprintf(log, "R");
                 }
-                ng = norm_2(state.g, n);
+                ng = norm_2(state.g.x, n);
                 value = state.value;
                 if (value < max_value) {
                         reason = 1;
@@ -435,16 +467,15 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 }
 
                 if ((i+1)%100 == 0) {
-                        center = state.x;
-                        gradient(state.g, approx->nvars, state.violation,
-                                 approx->nrhs,
-                                 approx, state.x, &value);
-                        pg = project_gradient_norm(state.g, state.x,
+                        center = state.x.x;
+                        gradient(&state.g, &state.violation,
+                                 approx, &state.x, &value);
+                        pg = project_gradient_norm(state.g.x, state.x.x,
                                                    approx->nvars,
                                                    approx->lower, 
                                                    approx->upper);
-                        delta = (diff(prev_x, state.x, n)
-                                 /(norm_2(state.x, n)+1e-10));
+                        delta = (diff(prev_x, state.x.x, n)
+                                 /(norm_2(state.x.x, n)+1e-10));
                         if (value < max_value) {
                                 reason = 1;
                                 break;
@@ -457,7 +488,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                 reason = 3;
                                 break;
                         }
-                        memcpy(prev_x, state.x, n*sizeof(double));
+                        memcpy(prev_x, state.x.x, n*sizeof(double));
                 }
                 if ((i == 0) || (period && ((i+1)%period == 0))) {
                         if (restart) {

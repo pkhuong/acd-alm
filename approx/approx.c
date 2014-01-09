@@ -299,6 +299,69 @@ static void gradient(struct vector * OUT_grad,
                 *OUT_value += dot(approx->linear, xv);
 }
 
+static void gradient2(struct vector ** OUT_grad,
+                      approx_t approx, struct vector ** OUT_scaled,
+                      struct vector ** xv, double ** OUT_value)
+{
+        size_t nvars = OUT_grad[0]->n,
+                nrows = xv[0]->nviolation;
+        assert(OUT_grad[1]->n == nvars);
+        assert(xv[1]->nviolation == nrows);
+        assert(nvars == approx->nvars);
+        assert(nrows == approx->nrhs);
+        for (size_t i = 0; i < 2; i++) {
+                assert(nrows == OUT_scaled[i]->n);
+                assert(nvars == xv[i]->n);
+        }
+
+        for (size_t i = 0; i < 2; i++) {
+#ifndef NO_CACHING
+                if (!xv[i]->violationp)
+#endif
+                        compute_violation(xv[i], approx);
+        }
+
+        for (size_t i = 0; i < 2; i++) {
+                double * scaled = OUT_scaled[i]->x;
+                {
+                        const double * weight = approx->weight;
+                        double * viol = xv[i]->violation;
+                        if (OUT_value[i] == NULL) {
+                                for (size_t i = 0; i < nrows; i++)
+                                        scaled[i] = weight[i]*viol[i];
+                        } else  {
+                                double value = 0;
+                                for (size_t i = 0; i < nrows; i++) {
+                                        double v = viol[i];
+                                        double w = weight[i];
+                                        value += .5*w*v*v;
+                                        scaled[i] = v*w;
+                        }
+                                *OUT_value[i] = value;           
+                        }
+                }
+        }
+
+        {
+                double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};
+                const double * scaled[2] = {OUT_scaled[0]->x,
+                                            OUT_scaled[1]->x};
+                assert(0 == sparse_matrix_multiply_2(grad, nvars,
+                                                     approx->matrix,
+                                                     scaled, nrows,
+                                                     1));
+        }
+
+        for (size_t i = 0; i < 2; i++) {
+                double * grad = OUT_grad[i]->x;
+                const double * linear = approx->linear;
+                for (size_t i = 0; i < nvars; i++)
+                        grad[i] += linear[i];
+                if (OUT_value[i] != NULL)
+                        *OUT_value[i] += dot(approx->linear, xv[i]);
+        }
+}
+
 static inline double min(double x, double y)
 {
         return (x<y)?x:y;
@@ -396,8 +459,8 @@ struct approx_state
 
         double theta;
 
-        struct vector g;
-        struct vector violation;
+        struct vector g, g2;
+        struct vector violation, violation2;
         double value;
 };
 
@@ -412,7 +475,9 @@ static void init_state(struct approx_state * state,
         state->theta = 1;
 
         init_vector(&state->g, nvars, 0);
+        init_vector(&state->g2, nvars, 0);
         init_vector(&state->violation, nrows, 0);
+        init_vector(&state->violation2, nrows, 0);
         state->value = HUGE_VAL;
 }
 
@@ -423,7 +488,9 @@ static void destroy_state(struct approx_state * state)
         destroy_vector(&state->zp);
         destroy_vector(&state->x);
         destroy_vector(&state->g);
+        destroy_vector(&state->g2);
         destroy_vector(&state->violation);
+        destroy_vector(&state->violation2);
 
         memset(state, 0, sizeof(struct approx_state));
 }
@@ -433,14 +500,20 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
 {
         linterp(&state->y, state->theta,
                 &state->x, &state->z);
-        gradient(&state->g, approx, &state->violation, &state->y, NULL);
+        {
+                struct vector * g[2] = {&state->g, &state->g2};
+                struct vector * violation[2] = {&state->violation,
+                                                &state->violation2};
+                struct vector * x[2]= {&state->z, &state->y};
+                double * values[2] = {&state->value, NULL};
+                gradient2(g, approx, violation, x, values);
+                
+        }
         step(&state->zp, state->theta,
-             &state->g, &state->z,
+             &state->g2, &state->z,
              approx->lower, approx->upper,
              approx->inv_v);
 
-        gradient(&state->g, approx, &state->violation,
-                 &state->z, &state->value);
         *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                         approx->lower, approx->upper);
 

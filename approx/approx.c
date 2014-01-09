@@ -235,11 +235,16 @@ static void project(struct vector * xv,
                 x[i] = min(max(lower[i], x[i]), upper[i]);
 }
 
-static void step(double * zp, size_t n, double theta,
-                 const double * g, const double * z,
+static void step(struct vector * zpv, double theta,
+                 const struct vector * gv, const struct vector * zv,
                  const double * lower, const double * upper,
                  const double * inv_v)
 {
+        size_t n = zpv->n;
+        assert(gv->n == n);
+        assert(zv->n == n);
+        double * zp = zpv->x;
+        const double * g = gv->x, * z = zv->x;
         double inv_theta = (1-1e-6)/theta; /* protect vs rounding */
         for (size_t i = 0; i < n; i++) {   /* errors. */
                 double gi = g[i], zi = z[i],
@@ -365,8 +370,8 @@ static double * iter(approx_t approx, struct approx_state * state,
                 &state->x, &state->z);
         gradient(&state->g, &state->violation,
                  approx, &state->y, NULL);
-        step(state->zp.x, approx->nvars, state->theta,
-             state->g.x, state->z.x,
+        step(&state->zp, state->theta,
+             &state->g, &state->z,
              approx->lower, approx->upper,
              approx->inv_v);
 

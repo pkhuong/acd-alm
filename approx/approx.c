@@ -411,8 +411,10 @@ static double diff(const double * x, const double * y, size_t n)
         return sqrt(acc);
 }
 
-static double norm_2(const double * x, size_t n)
+static double norm_2(const struct vector * xv)
 {
+        size_t n = xv->n;
+        const double * x = xv->x;
         double acc = 0;
         for (size_t i = 0; i < n; i++) {
                 double xi = x[i];
@@ -467,7 +469,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         if (log != NULL)
                                 fprintf(log, "R");
                 }
-                ng = norm_2(state.g.x, n);
+                ng = norm_2(&state.g);
                 value = state.value;
                 if (value < max_value) {
                         reason = 1;
@@ -487,7 +489,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                                    approx->lower, 
                                                    approx->upper);
                         delta = (diff(prev_x, state.x.x, n)
-                                 /(norm_2(state.x.x, n)+1e-10));
+                                 /(norm_2(&state.x)+1e-10));
                         if (value < max_value) {
                                 reason = 1;
                                 break;

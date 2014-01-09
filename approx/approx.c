@@ -287,10 +287,13 @@ static double dot_diff(const struct vector * gv,
         return acc;
 }
 
-static double project_gradient_norm(const double * g, const double * x,
-                                    size_t n,
+static double project_gradient_norm(const struct vector * gv,
+                                    const struct vector * xv,
                                     const double * lower, const double * upper)
 {
+        size_t n = gv->n;
+        assert(xv->n == n);
+        const double * g = gv->x, * x = xv->x;
         double acc = 0;
         for (size_t i = 0; i < n; i++) {
                 double xi = x[i];
@@ -369,8 +372,7 @@ static double * iter(approx_t approx, struct approx_state * state,
 
         gradient(&state->g, &state->violation,
                  approx, &state->z, &state->value);
-        *OUT_pg = project_gradient_norm(state->g.x, state->z.x,
-                                        approx->nvars,
+        *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                         approx->lower, approx->upper);
 
         if (dot_diff(&state->g, &state->z, &state->zp) > 0) {
@@ -476,8 +478,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         center = state.x.x;
                         gradient(&state.g, &state.violation,
                                  approx, &state.x, &value);
-                        pg = project_gradient_norm(state.g.x, state.x.x,
-                                                   approx->nvars,
+                        pg = project_gradient_norm(&state.g, &state.x,
                                                    approx->lower, 
                                                    approx->upper);
                         delta = (diff(prev_x, state.x.x, n)

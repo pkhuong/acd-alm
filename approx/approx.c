@@ -15,7 +15,7 @@ struct approx {
         double * lower, * upper; /* box */
 
         uint32_t * beta;
-        double * v;
+        double * inv_v;
 };
 
 static double * copy_double(const double * x, size_t n)
@@ -58,7 +58,7 @@ approx_t approx_make(sparse_matrix_t constraints,
         approx->upper = copy_double_default(upper, nvars, HUGE_VAL);
 
         approx->beta = calloc(nrhs, sizeof(uint32_t));
-        approx->v = calloc(nvars, sizeof(double));
+        approx->inv_v = calloc(nvars, sizeof(double));
 
         approx_update_step_sizes(approx);
 
@@ -90,7 +90,7 @@ int approx_free(approx_t approx)
         free(approx->lower);
         free(approx->upper);
         free(approx->beta);
-        free(approx->v);
+        free(approx->inv_v);
         memset(approx, 0, sizeof(struct approx));
         free(approx);
 
@@ -103,10 +103,10 @@ int approx_update_step_sizes(approx_t approx)
         assert(approx->nvars == sparse_matrix_ncolumns(approx->matrix));
 
         uint32_t * beta = approx->beta;
-        double * v = approx->v;
+        double * inv_v = approx->inv_v;
         const double * weight = approx->weight;
         memset(beta, 0, approx->nrhs*sizeof(uint32_t));
-        memset(v, 0, approx->nvars*sizeof(double));
+        memset(inv_v, 0, approx->nvars*sizeof(double));
 
         sparse_matrix_t matrix = approx->matrix;
         size_t nnz = sparse_matrix_nnz(matrix);
@@ -123,8 +123,12 @@ int approx_update_step_sizes(approx_t approx)
                 uint32_t row = rows[i];
                 double vi = values[i];
                 double w = weight[row];
-                v[columns[i]] += w*beta[row]*vi*vi;
+                inv_v[columns[i]] += w*beta[row]*vi*vi;
         }
+
+        size_t nvars = approx->nvars;
+        for (size_t i = 0; i < nvars; i++)
+                inv_v[i] = 1.0/inv_v[i];
 
         return 0;
 }
@@ -210,15 +214,16 @@ static void project(double * x, size_t n,
 static void step(double * zp, size_t n, double theta,
                  const double * g, const double * z,
                  const double * lower, const double * upper,
-                 const double * v)
+                 const double * inv_v)
 {
+        double inv_theta = 1/theta;
         for (size_t i = 0; i < n; i++) {
                 double gi = g[i], zi = z[i],
                         li = lower[i], ui = upper[i],
-                        vi = v[i];
-                double inv_step = theta*vi;
+                        inv_vi = inv_v[i];
+                double step = inv_theta*inv_vi;
 
-                if (inv_step == 0) {
+                if (step == HUGE_VAL) {
                         if (gi == 0) {
                                 zp[i] = zi;
                         } else if (gi > 0) {
@@ -229,7 +234,7 @@ static void step(double * zp, size_t n, double theta,
                                 zp[i] = ui;
                         }
                 } else {
-                        double trial = zi - gi/inv_step;
+                        double trial = zi - gi*step;
                         zp[i] = min(max(li, trial), ui);
                 }
         }
@@ -327,7 +332,7 @@ static double * iter(approx_t approx, struct approx_state * state,
         step(state->zp, approx->nvars, state->theta,
              state->g, state->z,
              approx->lower, approx->upper,
-             approx->v);
+             approx->inv_v);
 
         gradient(state->g, approx->nvars, state->violation, approx->nrhs,
                  approx, state->z, &state->value);

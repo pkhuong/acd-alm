@@ -249,21 +249,27 @@ static void linterp(struct vector * OUT_yv, double theta,
         assert(xv->n == nvars);
         assert(zv->n == nvars);
 
-        double * OUT_y = OUT_yv->x;
-        const double * x = xv->x, * z = zv->x;
+        v2d scale2 = {scale, scale}, theta2 = {theta, theta};
 
-        for (size_t i = 0; i < nvars; i++)
-                OUT_y[i] = scale*x[i]+theta*z[i];
+        {
+                v2d * OUT_y = (v2d*)OUT_yv->x;
+                const v2d * x = (v2d*)xv->x, * z = (v2d*)zv->x;
+
+                size_t n = (nvars+1)/2;
+                for (size_t i = 0; i < n; i++)
+                        OUT_y[i] = scale2*x[i]+theta2*z[i];
+        }
 
         size_t nviolation = OUT_yv->nviolation;
         if (nviolation && xv->violationp && zv->violationp) {
                 assert(xv->nviolation == nviolation);
                 assert(zv->nviolation == nviolation);
-                double * OUT_y = OUT_yv->violation;
-                const double * x = xv->violation, * z = zv->violation;
-                
-                for (size_t i = 0; i < nviolation; i++)
-                        OUT_y[i] = scale*x[i]+theta*z[i];
+                v2d * OUT_y = (v2d*)OUT_yv->violation;
+                const v2d * x = (v2d*)xv->violation, 
+                        * z = (v2d*)zv->violation;
+                size_t n = (nviolation+1)/2;
+                for (size_t i = 0; i < n; i++)
+                        OUT_y[i] = scale2*x[i]+theta2*z[i];
                 OUT_yv->violationp = 1;
         } else {
                 OUT_yv->violationp = 0;

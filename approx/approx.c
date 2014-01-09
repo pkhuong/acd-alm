@@ -337,6 +337,13 @@ static void copy_vector(struct vector * x, const struct vector * y)
         memcpy(x->x, y->x, n*sizeof(double));
 }
 
+static void set_vector(struct vector * x, const double * src,
+                       approx_t approx)
+{
+        memcpy(x->x, src, x->n*sizeof(double));
+        project(x, approx->lower, approx->upper);        
+}
+
 static void destroy_vector(struct vector * x)
 {
         free(x->x);
@@ -450,10 +457,9 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
 
         struct approx_state state;
         init_state(&state, approx->nvars, approx->nrhs);
-        memcpy(state.x.x, x, n*sizeof(double));
-        project(&state.x, approx->lower, approx->upper);
-        copy_vector(&state.z, &state.x);
 
+        set_vector(&state.x, x, approx);
+        copy_vector(&state.z, &state.x);
         double * prev_x = calloc(n, sizeof(double));
         memcpy(prev_x, state.x.x, n*sizeof(double));
 

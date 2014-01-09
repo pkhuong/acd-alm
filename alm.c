@@ -254,7 +254,7 @@ static int iter(struct alm_state * state, alm_t alm,
         violation(state->violation, alm, x);
         double max_viol = norm_inf(state->violation, alm->nrhs, NULL);
         if (log != NULL)
-                fprintf(log, "%10zu: %12g %12g %12g %12g %12g",
+                fprintf(log, "%10zu: %12g %12g %.18g %.18g %.18g",
                         k, 
                         max_viol,
                         norm_2(state->violation, alm->nrhs),

@@ -330,6 +330,13 @@ static void init_vector(struct vector * x, size_t n)
         x->x = calloc(n, sizeof(double));
 }
 
+static void copy_vector(struct vector * x, const struct vector * y)
+{
+        size_t n = x->n;
+        assert(n == y->n);
+        memcpy(x->x, y->x, n*sizeof(double));
+}
+
 static void destroy_vector(struct vector * x)
 {
         free(x->x);
@@ -363,8 +370,8 @@ static void destroy_state(struct approx_state * state)
         memset(state, 0, sizeof(struct approx_state));
 }
 
-static double * iter(approx_t approx, struct approx_state * state,
-                     double * OUT_pg)
+static const struct vector *
+iter(approx_t approx, struct approx_state * state, double * OUT_pg)
 {
         linterp(&state->y, state->theta,
                 &state->x, &state->z);
@@ -382,10 +389,9 @@ static double * iter(approx_t approx, struct approx_state * state,
 
         if (dot_diff(&state->g, &state->z, &state->zp) > 0) {
                 /* Oscillation */
-                size_t total = approx->nvars*sizeof(double);
-                memcpy(state->x.x, state->z.x, total);
+                copy_vector(&state->x, &state->z);
                 state->theta = 1;
-                return state->x.x;
+                return &state->x;
         }
 
         linterp(&state->x, state->theta,
@@ -398,7 +404,7 @@ static double * iter(approx_t approx, struct approx_state * state,
                 state->zp = temp;
         }
 
-        return state->zp.x;
+        return &state->zp;
 }
 
 static double diff(const double * x, const double * y, size_t n)
@@ -446,12 +452,12 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         init_state(&state, approx->nvars, approx->nrhs);
         memcpy(state.x.x, x, n*sizeof(double));
         project(&state.x, approx->lower, approx->upper);
-        memcpy(state.z.x, state.x.x, n*sizeof(double));
+        copy_vector(&state.z, &state.x);
 
         double * prev_x = calloc(n, sizeof(double));
         memcpy(prev_x, state.x.x, n*sizeof(double));
 
-        const double * center = state.x.x;
+        const struct vector * center = &state.x;
         double value = state.value;
         double ng = HUGE_VAL, pg = HUGE_VAL;
         double delta = HUGE_VAL;
@@ -460,7 +466,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         for (i = 0; i < niter; i++) {
                 delta = HUGE_VAL;
                 center = iter(approx, &state, &pg);
-                if (center == state.x.x) {
+                if (center == &state.x) {
                         if (!restart) {
                                 restart = 1;
                                 if (log != NULL)
@@ -482,7 +488,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 }
 
                 if ((i+1)%100 == 0) {
-                        center = state.x.x;
+                        center = &state.x;
                         gradient(&state.g, &state.violation,
                                  approx, &state.x, &value);
                         pg = project_gradient_norm(&state.g, &state.x,
@@ -518,7 +524,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         }
         print_log(log, i+1, value+offset, ng, pg, delta);
 
-        memcpy(x, center, n*sizeof(double));
+        memcpy(x, center->x, n*sizeof(double));
         if (OUT_diagnosis != NULL) {
                 OUT_diagnosis[0] = value+offset;
                 OUT_diagnosis[1] = ng;

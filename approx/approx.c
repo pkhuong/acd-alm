@@ -507,7 +507,6 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 struct vector * x[2]= {&state->z, &state->y};
                 double * values[2] = {&state->value, NULL};
                 gradient2(g, approx, violation, x, values);
-                
         }
         step(&state->zp, state->theta,
              &state->g2, &state->z,

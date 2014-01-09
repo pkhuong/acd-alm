@@ -5,6 +5,7 @@
 #include <string.h>
 #include <strings.h>
 #include <math.h>
+#include <xmmintrin.h>
 
 #define SWAP(X, Y) do {                         \
                 __typeof__(X) temp = (X);       \
@@ -20,12 +21,16 @@ struct crs
         double * values;
 };
 
+#ifndef PREFETCH_DISTANCE
+# define PREFETCH_DISTANCE (16)
+#endif
+
 static int init_crs(struct crs * crs, size_t nrows, size_t nnz)
 {
         crs->nrows = nrows;
         crs->rows_indices = calloc(nrows+1, sizeof(uint32_t));
-        crs->columns = calloc(nnz, sizeof(uint32_t));
-        crs->values = calloc(nnz, sizeof(double));
+        crs->columns = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
+        crs->values = calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
         return 0;
 }
 
@@ -189,9 +194,9 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
         matrix->ncolumns = ncolumns;
         matrix->nrows = nrows;
         matrix->nnz = nnz;
-        matrix->rows = malloc(nnz*sizeof(uint32_t));
-        matrix->columns = malloc(nnz*sizeof(uint32_t));
-        matrix->values = malloc(nnz*sizeof(double));
+        matrix->rows = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
+        matrix->columns = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
+        matrix->values = calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
 
         memcpy(matrix->rows, rows, nnz*sizeof(uint32_t));
         memcpy(matrix->columns, columns, nnz*sizeof(uint32_t));
@@ -217,6 +222,8 @@ int sparse_matrix_free(sparse_matrix_t matrix)
         return 0;
 }
 
+#define PREFETCH_TYPE _MM_HINT_NTA
+
 static void mult(double * out,
                  size_t nnz,
                  const uint32_t * columns, const uint32_t * rows,
@@ -228,6 +235,10 @@ static void mult(double * out,
                         row = rows[i];
                 double ax = values[i]*x[col];
                 out[row] += ax;
+#if PREFETCH_DISTANCE
+                _mm_prefetch(x+columns[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
+                _mm_prefetch(out+rows[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
+#endif
         }
 }
 
@@ -245,6 +256,12 @@ static void mult2(double ** out,
                 double v = values[i];
                 out0[row] += v*x0[col];
                 out1[row] += v*x1[col];
+#if PREFETCH_DISTANCE
+                _mm_prefetch(x0+columns[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
+                _mm_prefetch(x1+columns[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
+                _mm_prefetch(out0+rows[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
+                _mm_prefetch(out1+rows[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
+#endif
         }
 }
 
@@ -258,8 +275,13 @@ static void mult_crs(double * out, struct crs * crs, const double * x)
                 uint32_t begin = rows_indices[i],
                         end = rows_indices[i+1];
                 double acc = 0;
-                for (; begin < end; begin++)
+                for (; begin < end; begin++) {
                         acc += values[begin]*x[columns[begin]];
+#if PREFETCH_DISTANCE
+                        _mm_prefetch(x+columns[begin+PREFETCH_DISTANCE],
+                                      PREFETCH_TYPE);
+#endif
+                }
                 out[i] = acc;
         }
 }
@@ -281,6 +303,12 @@ static void mult_crs2(double ** out, struct crs * crs, const double ** x)
                         uint32_t col = columns[begin];
                         acc0 += v*x0[col];
                         acc1 += v*x1[col];
+#if PREFETCH_DISTANCE
+                        _mm_prefetch(x0+columns[begin+PREFETCH_DISTANCE],
+                                      PREFETCH_TYPE);
+                        _mm_prefetch(x1+columns[begin+PREFETCH_DISTANCE],
+                                      PREFETCH_TYPE);
+#endif
                 }
                 out0[i] = acc0;
                 out1[i] = acc1;

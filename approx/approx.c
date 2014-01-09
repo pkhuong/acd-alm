@@ -5,6 +5,50 @@
 #include <string.h>
 #include <strings.h>
 
+#include <sys/mman.h>
+
+#if defined(MAP_HUGETLB) && defined(USE_MMAP)
+void * large_calloc(size_t n, size_t size)
+{
+        size_t mask = (1ul<<21)-1;
+        size_t bytes = (n*size+mask)&(~mask);
+        void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
+                          MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
+                          -1, 0);
+        if (ret == MAP_FAILED)
+                ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
+                           MAP_ANONYMOUS|MAP_PRIVATE,
+                           -1, 0);
+        assert(ret != MAP_FAILED);
+        return ret;
+}
+
+void large_free(void * ptr, size_t n, size_t size)
+{
+        size_t mask = (1ul<<21)-1;
+        size_t bytes = (n*size+mask)&(~mask);
+        munmap(ptr, bytes);
+}
+#else
+void * large_calloc(size_t n, size_t size)
+{
+#if _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
+        void * ptr = 0;
+        assert(0 == posix_memalign(&ptr, 16, n*size));
+        return ptr;
+#else
+        return calloc(n, size);
+#endif
+}
+
+void large_free(void * ptr, size_t n, size_t size)
+{
+        (void)n;
+        (void)size;
+        free(ptr);
+}
+#endif
+
 struct approx {
         size_t nrhs, nvars;
         sparse_matrix_t matrix;
@@ -20,14 +64,14 @@ struct approx {
 
 static double * copy_double(const double * x, size_t n)
 {
-        double * out = calloc(n, sizeof(double));
+        double * out = large_calloc(n, sizeof(double));
         memcpy(out, x, sizeof(double)*n);
         return out;
 }
 
 static double * copy_double_default(const double * x, size_t n, double missing)
 {
-        double * out = calloc(n, sizeof(double));
+        double * out = large_calloc(n, sizeof(double));
         if (x != NULL) {
                 memcpy(out, x, sizeof(double)*n);
         } else {
@@ -57,8 +101,8 @@ approx_t approx_make(sparse_matrix_t constraints,
         approx->lower = copy_double_default(lower, nvars, -HUGE_VAL);
         approx->upper = copy_double_default(upper, nvars, HUGE_VAL);
 
-        approx->beta = calloc(nrhs, sizeof(uint32_t));
-        approx->inv_v = calloc(nvars, sizeof(double));
+        approx->beta = large_calloc(nrhs, sizeof(uint32_t));
+        approx->inv_v = large_calloc(nvars, sizeof(double));
 
         approx_update_step_sizes(approx);
 
@@ -84,13 +128,16 @@ DEF(double *, upper)
 
 int approx_free(approx_t approx)
 {
-        free(approx->rhs);
-        free(approx->weight);
-        free(approx->linear);
-        free(approx->lower);
-        free(approx->upper);
-        free(approx->beta);
-        free(approx->inv_v);
+        size_t nrhs = approx->nrhs,
+                nvars = approx->nvars;
+
+        large_free(approx->rhs, nrhs, sizeof(double));
+        large_free(approx->weight, nrhs, sizeof(double));
+        large_free(approx->linear, nvars, sizeof(double));
+        large_free(approx->lower, nvars, sizeof(double));
+        large_free(approx->upper, nvars, sizeof(double));
+        large_free(approx->beta, nrhs, sizeof(double));
+        large_free(approx->inv_v, nvars, sizeof(double));
         memset(approx, 0, sizeof(struct approx));
         free(approx);
 
@@ -132,44 +179,6 @@ int approx_update_step_sizes(approx_t approx)
 
         return 0;
 }
-
-#include <sys/mman.h>
-
-#if defined(MAP_HUGETLB) && defined(USE_HUGE_PAGES)
-void * large_calloc(size_t n, size_t size)
-{
-        size_t mask = (1ul<<21)-1;
-        size_t bytes = (n*size+mask)&(~mask);
-        void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
-                          MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
-                          -1, 0);
-        if (ret == MAP_FAILED)
-                ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
-                           MAP_ANONYMOUS|MAP_PRIVATE,
-                           -1, 0);
-        assert(ret != MAP_FAILED);
-        return ret;
-}
-
-void large_free(void * ptr, size_t n, size_t size)
-{
-        size_t mask = (1ul<<21)-1;
-        size_t bytes = (n*size+mask)&(~mask);
-        munmap(ptr, bytes);
-}
-#else
-void * large_calloc(size_t n, size_t size)
-{
-        return calloc(n, size);
-}
-
-void large_free(void * ptr, size_t n, size_t size)
-{
-        (void)n;
-        (void)size;
-        free(ptr);
-}
-#endif
 
 struct vector {
         double * x;
@@ -622,7 +631,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         set_vector(&state.x, x, approx);
         compute_violation(&state.x, approx);
         copy_vector(&state.z, &state.x);
-        double * prev_x = calloc(n, sizeof(double));
+        double * prev_x = large_calloc(n, sizeof(double));
         memcpy(prev_x, state.x.x, n*sizeof(double));
 
         const struct vector * center = &state.x;
@@ -702,7 +711,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 OUT_diagnosis[4] = i+1;
         }
 
-        free(prev_x);
+        large_free(prev_x, n, sizeof(double));
         destroy_state(&state);
 
         return reason;

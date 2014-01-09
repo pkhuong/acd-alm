@@ -392,9 +392,9 @@ static void print_log(FILE * log, size_t k,
                        k, value, ng, pg);
 }
 
-double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
-                    double max_pg, double max_value, double min_delta,
-                    FILE * log, size_t period)
+int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
+                 double max_pg, double max_value, double min_delta,
+                 FILE * log, size_t period, double * OUT_diagnosis)
 {
         assert(n == approx->nvars);
 
@@ -412,7 +412,7 @@ double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         double ng = HUGE_VAL, pg = HUGE_VAL;
         double delta = HUGE_VAL;
         size_t i;
-        int restart = 0;
+        int restart = 0, reason = 0;
         for (i = 0; i < niter; i++) {
                 delta = HUGE_VAL;
                 center = iter(approx, &state, &pg);
@@ -427,8 +427,15 @@ double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 /* } */
                 ng = norm_2(state.g, n);
                 value = state.value;
-                if (pg < max_pg) break;
-                if (value < max_value) break;
+                if (value < max_value) {
+                        reason = 1;
+                        break;
+                }
+
+                if (pg < max_pg) {
+                        reason = 2;
+                        break;
+                }
 
                 if ((i+1)%100 == 0) {
                         center = state.x;
@@ -440,11 +447,19 @@ double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                                    approx->lower, 
                                                    approx->upper);
                         delta = (diff(prev_x, state.x, n)
-                                 /norm_2(state.x, n));
-                        if (delta < min_delta)
+                                 /(norm_2(state.x, n)+1e-10));
+                        if (value < max_value) {
+                                reason = 1;
                                 break;
-                        if (pg < max_pg) break;
-                        if (value < max_value) break;
+                        }
+                        if (pg < max_pg) {
+                                reason = 2;
+                                break;
+                        }
+                        if (delta < min_delta) {
+                                reason = 3;
+                                break;
+                        }
                         memcpy(prev_x, state.x, n*sizeof(double));
                 }
                 if ((i == 0) || (period && ((i+1)%period == 0))) {
@@ -462,10 +477,18 @@ double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         print_log(log, i+1, value, ng, pg, delta);
         memcpy(x, center, n*sizeof(double));
 
+        if (OUT_diagnosis != NULL) {
+                OUT_diagnosis[0] = value;
+                OUT_diagnosis[1] = ng;
+                OUT_diagnosis[2] = pg;
+                OUT_diagnosis[3] = delta;
+                OUT_diagnosis[4] = i+1;
+        }
+
         free(prev_x);
         destroy_state(&state);
 
-        return value;
+        return reason;
 }
 
 #ifdef TEST_APPROX
@@ -517,15 +540,18 @@ void test_1(size_t nrows, size_t ncolumns)
 
         approx_t a = approx_make(m, nrows, rhs, NULL, ncolumns,
                                  NULL, NULL, NULL);
-        double v = approx_solve(x, ncolumns, a, -1U,
-                                0, 1e-13, 0,
-                                stdout, 10000);
+        double diagnosis[5];
+        int r = approx_solve(x, ncolumns, a, -1U,
+                             0, 1e-13, 0,
+                             stdout, 10000, diagnosis);
+
+        assert(r > 0);
 
         double * residual = calloc(nrows, sizeof(double));
         assert(0 == sparse_matrix_multiply(residual, nrows,
                                            m, x, ncolumns, 0));
         double d = diff(rhs, residual, nrows);
-        printf("r: %.18f %.18f %p\n", v, d, x);
+        printf("r: %.18f %.18f %p\n", diagnosis[0], d, x);
 
         assert(d < 1e-6);
 

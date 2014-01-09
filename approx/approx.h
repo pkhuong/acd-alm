@@ -27,7 +27,8 @@ int approx_free(approx_t);
 
 int approx_update_step_sizes(approx_t); /* Call after mods to matrix/weight */
 
-double approx_solve(double * x, size_t n, approx_t approx, size_t niter,
-                    double max_pg, double max_value, double min_delta,
-                    FILE * log, size_t period);
+int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
+                 double max_pg, double max_value, double min_delta,
+                 FILE * log, size_t period,
+                 double * OUT_diagnosis /* NULL or double[5] */);
 #endif

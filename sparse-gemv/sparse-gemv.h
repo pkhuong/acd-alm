@@ -15,9 +15,9 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
 size_t sparse_matrix_ncolumns(sparse_matrix_t);
 size_t sparse_matrix_nrows(sparse_matrix_t);
 size_t sparse_matrix_nnz(sparse_matrix_t);
-uint32_t * sparse_matrix_rows(sparse_matrix_t);
-uint32_t * sparse_matrix_columns(sparse_matrix_t);
-double * sparse_matrix_values(sparse_matrix_t);
+const uint32_t * sparse_matrix_rows(sparse_matrix_t);
+const uint32_t * sparse_matrix_columns(sparse_matrix_t);
+const double * sparse_matrix_values(sparse_matrix_t);
 
 int sparse_matrix_free(sparse_matrix_t);
 

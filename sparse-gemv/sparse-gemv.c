@@ -22,9 +22,9 @@ struct sparse_matrix
 DEF(size_t, ncolumns)
 DEF(size_t, nrows)
 DEF(size_t, nnz)
-DEF(uint32_t *, rows)
-DEF(uint32_t *, columns)
-DEF(double *, values)
+DEF(const uint32_t *, rows)
+DEF(const uint32_t *, columns)
+DEF(const double *, values)
 
 #undef DEF
 

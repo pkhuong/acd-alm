@@ -273,8 +273,10 @@ void dense_mult_t(double * OUT_y,
 double diff(const double * x, const double * y, size_t n)
 {
         double acc = 0;
-        for (size_t i = 0; i < n; i++)
-                acc += pow(x[i]-y[i], 2);
+        for (size_t i = 0; i < n; i++) {
+                double d = x[i]-y[i];
+                acc += d*d;
+        }
         return sqrt(acc);
 }
 

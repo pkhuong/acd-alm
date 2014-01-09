@@ -573,8 +573,6 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         }
                         memcpy(prev_x, state.x.x, n*sizeof(double));
                         compute_violation(&state.x, approx);
-                        compute_violation(&state.z, approx);
-                        compute_violation(&state.zp, approx);
                 }
                 if ((i == 0) || (period && ((i+1)%period == 0))) {
                         if (restart) {

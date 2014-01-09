@@ -11,7 +11,7 @@
 void * large_calloc(size_t n, size_t size)
 {
         size_t mask = (1ul<<21)-1;
-        size_t bytes = (n*size+mask)&(~mask);
+        size_t bytes = (n*size+16+mask)&(~mask);
         void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
                           MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
                           -1, 0);
@@ -26,7 +26,7 @@ void * large_calloc(size_t n, size_t size)
 void large_free(void * ptr, size_t n, size_t size)
 {
         size_t mask = (1ul<<21)-1;
-        size_t bytes = (n*size+mask)&(~mask);
+        size_t bytes = (n*size+16+mask)&(~mask);
         munmap(ptr, bytes);
 }
 #else
@@ -34,7 +34,7 @@ void * large_calloc(size_t n, size_t size)
 {
 #if _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
         void * ptr = 0;
-        assert(0 == posix_memalign(&ptr, 16, n*size));
+        assert(0 == posix_memalign(&ptr, 16, n*size+16));
         return ptr;
 #else
         return calloc(n, size);
@@ -235,6 +235,8 @@ static void destroy_vector(struct vector * x)
         large_free(x->violation, x->nviolation, sizeof(double));
         memset(x, 0, sizeof(struct vector));
 }
+
+typedef double v2d __attribute__ ((vector_size (16)));
 
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,

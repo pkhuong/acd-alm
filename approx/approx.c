@@ -15,7 +15,7 @@ struct approx {
         double * lower, * upper; /* box */
 
         uint32_t * beta;
-        double * inv_v;
+        double * v;
 };
 
 static double * copy_double(const double * x, size_t n)
@@ -58,7 +58,7 @@ approx_t approx_make(sparse_matrix_t constraints,
         approx->upper = copy_double_default(upper, nvars, HUGE_VAL);
 
         approx->beta = calloc(nrhs, sizeof(uint32_t));
-        approx->inv_v = calloc(nvars, sizeof(double));
+        approx->v = calloc(nvars, sizeof(double));
 
         approx_update_step_sizes(approx);
 
@@ -90,7 +90,7 @@ int approx_free(approx_t approx)
         free(approx->lower);
         free(approx->upper);
         free(approx->beta);
-        free(approx->inv_v);
+        free(approx->v);
         memset(approx, 0, sizeof(struct approx));
         free(approx);
 
@@ -103,10 +103,10 @@ int approx_update_step_sizes(approx_t approx)
         assert(approx->nvars == sparse_matrix_ncolumns(approx->matrix));
 
         uint32_t * beta = approx->beta;
-        double * inv_v = approx->inv_v;
+        double * v = approx->v;
         const double * weight = approx->weight;
         memset(beta, 0, approx->nrhs*sizeof(uint32_t));
-        memset(inv_v, 0, approx->nvars*sizeof(double));
+        memset(v, 0, approx->nvars*sizeof(double));
 
         sparse_matrix_t matrix = approx->matrix;
         size_t nnz = sparse_matrix_nnz(matrix);
@@ -121,12 +121,10 @@ int approx_update_step_sizes(approx_t approx)
         /* for 1/2 |weight (*) (Ax-b)|^2: weight_j *(A_ij)^2 */
         for (size_t i = 0; i < nnz; i++) {
                 uint32_t row = rows[i];
-                double v = values[i];
-                inv_v[columns[i]] += weight[row]*beta[row]*v*v;
+                double vi = values[i];
+                double w = weight[row];
+                v[columns[i]] += w*beta[row]*vi*vi;
         }
-
-        for (size_t i = 0; i < approx->nvars; i++)
-                inv_v[i] = 1.0/inv_v[i];
 
         return 0;
 }
@@ -136,7 +134,7 @@ static void extrapolate_y(double * OUT_y, size_t nvars, double theta,
 {
         double scale = 1-theta;
         for (size_t i = 0; i < nvars; i++)
-                OUT_y[i] = scale*x[i]+z[i];
+                OUT_y[i] = scale*x[i]+theta*z[i];
 }
 
 static double dot(const double * x, const double * y, size_t n)
@@ -212,16 +210,15 @@ static void project(double * x, size_t n,
 static void step(double * zp, size_t n, double theta,
                  const double * g, const double * z,
                  const double * lower, const double * upper,
-                 const double * inv_v)
+                 const double * v)
 {
-        double inv_theta = 1/theta;
         for (size_t i = 0; i < n; i++) {
                 double gi = g[i], zi = z[i],
                         li = lower[i], ui = upper[i],
-                        inv_vi = inv_v[i];
-                double step = inv_theta*inv_vi;
+                        vi = v[i];
+                double inv_step = theta*vi;
 
-                if (step == HUGE_VAL) {
+                if (inv_step == 0) {
                         if (gi == 0) {
                                 zp[i] = zi;
                         } else if (gi > 0) {
@@ -232,7 +229,7 @@ static void step(double * zp, size_t n, double theta,
                                 zp[i] = ui;
                         }
                 } else {
-                        double trial = zi - step*gi;
+                        double trial = zi - gi/inv_step;
                         zp[i] = min(max(li, trial), ui);
                 }
         }
@@ -330,7 +327,7 @@ static double * iter(approx_t approx, struct approx_state * state,
         step(state->zp, approx->nvars, state->theta,
              state->g, state->z,
              approx->lower, approx->upper,
-             approx->inv_v);
+             approx->v);
 
         gradient(state->g, approx->nvars, state->violation, approx->nrhs,
                  approx, state->z, &state->value);
@@ -394,7 +391,8 @@ static void print_log(FILE * log, size_t k,
 
 int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                  double max_pg, double max_value, double min_delta,
-                 FILE * log, size_t period, double * OUT_diagnosis)
+                 FILE * log, size_t period, double * OUT_diagnosis,
+                 double offset)
 {
         assert(n == approx->nvars);
 
@@ -467,18 +465,18 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                 restart = 0;
                                 printf("\n");
                         }
-                        print_log(log, i+1, value, ng, pg, delta);
+                        print_log(log, i+1, value+offset, ng, pg, delta);
                 }
         }
         if (restart) {
                 restart = 0;
                 printf("\n");
         }
-        print_log(log, i+1, value, ng, pg, HUGE_VAL);
+        print_log(log, i+1, value+offset, ng, pg, HUGE_VAL);
 
         memcpy(x, center, n*sizeof(double));
         if (OUT_diagnosis != NULL) {
-                OUT_diagnosis[0] = value;
+                OUT_diagnosis[0] = value+offset;
                 OUT_diagnosis[1] = ng;
                 OUT_diagnosis[2] = pg;
                 OUT_diagnosis[3] = delta;

@@ -276,14 +276,15 @@ static void linterp(struct vector * OUT_yv, double theta,
         }
 }
 
-static double dot(const double * x, const struct vector * yv)
+static double dot(const double * xp, const struct vector * yv)
 {
-        size_t n = yv->n;
-        const double * y = yv->x;
-        double acc = 0;
+        size_t n = (yv->n+1)/2;
+        const v2d * x = (v2d*)xp;
+        const v2d * y = (v2d*)yv->x;
+        v2d acc = {0,0};
         for (size_t i = 0; i < n; i++)
                 acc += x[i]*y[i];
-        return acc;
+        return acc[0]+acc[1];
 }
 
 static void compute_violation(struct vector * xv, approx_t approx)

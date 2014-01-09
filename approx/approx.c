@@ -326,29 +326,22 @@ static void step(struct vector * zpv, double theta,
         assert(zv->n == n);
         double * zp = zpv->x;
         const double * g = gv->x, * z = zv->x;
+        double max_z = 0;
         double inv_theta = (1-1e-6)/theta; /* protect vs rounding */
         for (size_t i = 0; i < n; i++) {   /* errors. */
                 double gi = g[i], zi = z[i],
                         li = lower[i], ui = upper[i],
                         inv_vi = inv_v[i];
                 double step = inv_theta*inv_vi;
-
-                if (step == HUGE_VAL) {
-                        if (gi == 0) {
-                                zp[i] = zi;
-                        } else if (gi > 0) {
-                                assert(li > -HUGE_VAL);
-                                zp[i] = li;
-                        } else {
-                                assert(ui < HUGE_VAL);
-                                zp[i] = ui;
-                        }
-                } else {
-                        double trial = zi - gi*step;
-                        zp[i] = min(max(li, trial), ui);
-                }
+#ifndef UNSAFE_DESCENT_STEP
+                step = ((step >= HUGE_VAL) && (gi == 0))?0:step;
+#endif
+                double trial = zi - gi*step;
+                zp[i] = trial = min(max(li, trial), ui);
+                max_z = max(max_z, fabs(trial));
         }
-        zpv->violationp = 0;
+        assert(max_z < HUGE_VAL);
+        zpv->violationp = 0; /* cache is now invalid */
 }
 
 static double next_theta(double theta)

@@ -206,6 +206,7 @@ static double update_weights(alm_t alm, const double * violation,
         if (max > .5*norm)
                 weights[max_i] *= 10;
 
+        approx_update_step_sizes(alm->approx);
         return norm;
 }
 

@@ -166,6 +166,9 @@ static void copy_vector(struct vector * x, const struct vector * y)
                 size_t m = x->nviolation;
                 assert(m == y->nviolation);
                 memcpy(x->violation, y->violation, m*sizeof(double));
+                x->violationp = 1;
+        } else {
+                x->violationp = 0;
         }
 }
 
@@ -202,15 +205,19 @@ static void linterp(struct vector * OUT_yv, double theta,
 
         for (size_t i = 0; i < nvars; i++)
                 OUT_y[i] = scale*x[i]+theta*z[i];
+
         size_t nviolation = OUT_yv->nviolation;
-        if (nviolation) {
+        if (nviolation && xv->violationp && zv->violationp) {
                 assert(xv->nviolation == nviolation);
                 assert(zv->nviolation == nviolation);
-        double * OUT_y = OUT_yv->violation;
-        const double * x = xv->violation, * z = zv->violation;
-
-        for (size_t i = 0; i < nviolation; i++)
-                OUT_y[i] = scale*x[i]+theta*z[i];
+                double * OUT_y = OUT_yv->violation;
+                const double * x = xv->violation, * z = zv->violation;
+                
+                for (size_t i = 0; i < nviolation; i++)
+                        OUT_y[i] = scale*x[i]+theta*z[i];
+                OUT_yv->violationp = 1;
+        } else {
+                OUT_yv->violationp = 0;
         }
 }
 
@@ -224,43 +231,54 @@ static double dot(const double * x, const struct vector * yv)
         return acc;
 }
 
+static void compute_violation(struct vector * xv, approx_t approx)
+{
+        size_t nvars = xv->n,
+                nrows = xv->nviolation;
+
+        assert(nvars == approx->nvars);
+        assert(nrows == approx->nrhs);
+
+        assert(0 == sparse_matrix_multiply(xv->violation, nrows,
+                                           approx->matrix, xv->x, nvars, 0));
+        const double * rhs = approx->rhs,
+                * weight = approx->weight;
+        double * viol = xv->violation;
+        for (size_t i = 0; i < nrows; i++) {
+                double v = viol[i] - rhs[i];
+                viol[i] = v*weight[i];
+        }
+        xv->violationp = 1;
+}
+
 static void gradient(struct vector * OUT_grad,
-                     struct vector * OUT_violation,
                      approx_t approx,
-                     const struct vector * xv, double * OUT_value)
+                     struct vector * xv, double * OUT_value)
 {
         size_t nvars = OUT_grad->n,
-                nrows = OUT_violation->n;
+                nrows = xv->nviolation;
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
         assert(nvars == xv->n);
-        assert(0 == sparse_matrix_multiply(OUT_violation->x, nrows,
-                                           approx->matrix, xv->x, nvars, 0));
 
-        {
-                const double * rhs = approx->rhs,
-                        * weight = approx->weight;
-                double * viol = OUT_violation->x;
-                if (OUT_value != NULL) {
-                        double value = 0;
-                        for (size_t i = 0; i < nrows; i++) {
-                                double v = viol[i] - rhs[i];
-                                double w = weight[i];
-                                value += .5*w*v*v;
-                                viol[i] = v*w;
-                        }
-                        *OUT_value = value;
-                } else {
-                        for (size_t i = 0; i < nrows; i++) {
-                                double v = viol[i] - rhs[i];
-                                viol[i] = v*weight[i];
-                        }
+        if (!xv->violationp || 1)
+                compute_violation(xv, approx);
+
+        if (OUT_value != NULL) {
+                const double * weight = approx->weight;
+                double * viol = xv->violation;
+                double value = 0;
+                for (size_t i = 0; i < nrows; i++) {
+                        double v = viol[i];
+                        double w = weight[i];
+                        value += .5*v*v/w;
                 }
+                *OUT_value = value;                
         }
 
         assert(0 == sparse_matrix_multiply(OUT_grad->x, nvars,
                                            approx->matrix,
-                                           OUT_violation->x, nrows,
+                                           xv->violation, nrows,
                                            1));
 
         {
@@ -325,6 +343,7 @@ static void step(struct vector * zpv, double theta,
                         zp[i] = min(max(li, trial), ui);
                 }
         }
+        zpv->violationp = 0;
 }
 
 static double next_theta(double theta)
@@ -414,15 +433,13 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
 {
         linterp(&state->y, state->theta,
                 &state->x, &state->z);
-        gradient(&state->g, &state->violation,
-                 approx, &state->y, NULL);
+        gradient(&state->g, approx, &state->y, NULL);
         step(&state->zp, state->theta,
              &state->g, &state->z,
              approx->lower, approx->upper,
              approx->inv_v);
 
-        gradient(&state->g, &state->violation,
-                 approx, &state->z, &state->value);
+        gradient(&state->g, approx, &state->z, &state->value);
         *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                         approx->lower, approx->upper);
 
@@ -433,6 +450,7 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 return &state->x;
         }
 
+        compute_violation(&state->zp, approx);
         linterp(&state->x, state->theta,
                 &state->x, &state->zp);
         state->theta = next_theta(state->theta);
@@ -491,6 +509,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         init_state(&state, approx->nvars, approx->nrhs);
 
         set_vector(&state.x, x, approx);
+        compute_violation(&state.x, approx);
         copy_vector(&state.z, &state.x);
         double * prev_x = calloc(n, sizeof(double));
         memcpy(prev_x, state.x.x, n*sizeof(double));
@@ -527,8 +546,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
 
                 if ((i+1)%100 == 0) {
                         center = &state.x;
-                        gradient(&state.g, &state.violation,
-                                 approx, &state.x, &value);
+                        gradient(&state.g, approx, &state.x, &value);
                         pg = project_gradient_norm(&state.g, &state.x,
                                                    approx->lower, 
                                                    approx->upper);
@@ -547,6 +565,9 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                 break;
                         }
                         memcpy(prev_x, state.x.x, n*sizeof(double));
+                        compute_violation(&state.x, approx);
+                        compute_violation(&state.z, approx);
+                        compute_violation(&state.zp, approx);
                 }
                 if ((i == 0) || (period && ((i+1)%period == 0))) {
                         if (restart) {

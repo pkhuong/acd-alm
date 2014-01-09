@@ -133,6 +133,44 @@ int approx_update_step_sizes(approx_t approx)
         return 0;
 }
 
+#include <sys/mman.h>
+
+#if defined(MAP_HUGETLB) && defined(USE_HUGE_PAGES)
+void * large_calloc(size_t n, size_t size)
+{
+        size_t mask = (1ul<<21)-1;
+        size_t bytes = (n*size+mask)&(~mask);
+        void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
+                          MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
+                          -1, 0);
+        if (ret == MAP_FAILED)
+                ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
+                           MAP_ANONYMOUS|MAP_PRIVATE,
+                           -1, 0);
+        assert(ret != MAP_FAILED);
+        return ret;
+}
+
+void large_free(void * ptr, size_t n, size_t size)
+{
+        size_t mask = (1ul<<21)-1;
+        size_t bytes = (n*size+mask)&(~mask);
+        munmap(ptr, bytes);
+}
+#else
+void * large_calloc(size_t n, size_t size)
+{
+        return calloc(n, size);
+}
+
+void large_free(void * ptr, size_t n, size_t size)
+{
+        (void)n;
+        (void)size;
+        free(ptr);
+}
+#endif
+
 struct vector {
         double * x;
         double * violation; /* Ax-b */
@@ -144,9 +182,9 @@ struct vector {
 static void init_vector(struct vector * x, size_t n, size_t nviolation)
 {
         x->n = n;
-        x->x = calloc(n, sizeof(double));
+        x->x = large_calloc(n, sizeof(double));
         if (nviolation) {
-                x->violation = calloc(nviolation, sizeof(double));
+                x->violation = large_calloc(nviolation, sizeof(double));
                 x->nviolation = nviolation;
         } else {
                 x->violation = NULL;
@@ -184,8 +222,8 @@ static void set_vector(struct vector * x, const double * src,
 
 static void destroy_vector(struct vector * x)
 {
-        free(x->x);
-        free(x->violation);
+        large_free(x->x, x->n, sizeof(double));
+        large_free(x->violation, x->nviolation, sizeof(double));
         memset(x, 0, sizeof(struct vector));
 }
 

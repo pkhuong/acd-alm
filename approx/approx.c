@@ -202,6 +202,16 @@ static void linterp(struct vector * OUT_yv, double theta,
 
         for (size_t i = 0; i < nvars; i++)
                 OUT_y[i] = scale*x[i]+theta*z[i];
+        size_t nviolation = OUT_yv->nviolation;
+        if (nviolation) {
+                assert(xv->nviolation == nviolation);
+                assert(zv->nviolation == nviolation);
+        double * OUT_y = OUT_yv->violation;
+        const double * x = xv->violation, * z = zv->violation;
+
+        for (size_t i = 0; i < nviolation; i++)
+                OUT_y[i] = scale*x[i]+theta*z[i];
+        }
 }
 
 static double dot(const double * x, const struct vector * yv)

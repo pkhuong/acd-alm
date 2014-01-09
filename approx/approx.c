@@ -546,7 +546,7 @@ void test_1(size_t nrows, size_t ncolumns)
         double diagnosis[5];
         int r = approx_solve(x, ncolumns, a, -1U,
                              0, 1e-13, 0,
-                             stdout, 10000, diagnosis);
+                             stdout, 10000, diagnosis, 0);
 
         assert(r > 0);
 

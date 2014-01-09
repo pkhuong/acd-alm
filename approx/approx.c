@@ -259,7 +259,9 @@ static void gradient(struct vector * OUT_grad,
         assert(nrows == OUT_scaled->n);
         assert(nvars == xv->n);
 
+#ifndef NO_CACHING
         if (!xv->violationp)
+#endif
                 compute_violation(xv, approx);
 
         double * scaled = OUT_scaled->x;

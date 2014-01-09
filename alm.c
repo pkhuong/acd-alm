@@ -371,6 +371,7 @@ int main (int argc, char ** argv)
                   stdout, NULL);
         free(y);
         free(x);
+        sparse_matrix_free(alm_matrix(alm));
         alm_free(alm);
 
         return 0;

@@ -371,6 +371,7 @@ int main (int argc, char ** argv)
                   stdout, NULL);
         free(y);
         free(x);
+        alm_free(alm);
 
         return 0;
 }

@@ -634,12 +634,14 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
 
 static double diff(const double * x, const double * y, size_t n)
 {
-        double acc = 0;
-        for (size_t i = 0; i < n; i++) {
-                double delta = x[i]-y[i];
+        v2d acc = {0,0};
+        const v2d * x2 = (v2d*)x, * y2 = (v2d*)y;
+        size_t vector_n = (n+1)/2;
+        for (size_t i = 0; i < vector_n; i++) {
+                v2d delta = x2[i]-y2[i];
                 acc += delta*delta;
         }
-        return sqrt(acc);
+        return sqrt(acc[0]+acc[1]);
 }
 
 static double norm_2(const struct vector * xv)

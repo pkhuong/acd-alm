@@ -275,7 +275,7 @@ static void linterp(struct vector * OUT_yv, double theta,
                 assert(xv->nviolation == nviolation);
                 assert(zv->nviolation == nviolation);
                 v2d * OUT_y = (v2d*)OUT_yv->violation;
-                const v2d * x = (v2d*)xv->violation, 
+                const v2d * x = (v2d*)xv->violation,
                         * z = (v2d*)zv->violation;
                 size_t n = (nviolation+1)/2;
                 for (size_t i = 0; i < n; i++)
@@ -349,7 +349,7 @@ static double value(approx_t approx, struct vector * xv)
                 }
                 value = .5*(acc[0]+acc[1]);
         }
-        
+
         return xv->value = value+dot(approx->linear, xv);
 }
 
@@ -448,7 +448,7 @@ static void gradient2(struct vector ** OUT_grad,
                                         value += s*v;
                                         scaled[i] = s;
                                 }
-                                *OUT_value[i] = .5*(value[0]+value[1]);           
+                                *OUT_value[i] = .5*(value[0]+value[1]);
                         }
                 }
         }
@@ -548,7 +548,7 @@ static void step(struct vector * zpv, double theta,
  * f(x) ~= f(z) + g'x + \sum_i (theta v_i)/2 (x-z)^2_i
  *   min in z_i - 1/(theta v_i) g_i
  */
-static double 
+static double
 long_step(struct vector * zpv, double theta, double length,
           const struct vector * gv, const struct vector * zv,
           const double * restrict lower, const double * restrict upper,
@@ -621,7 +621,7 @@ static double dot_diff(const struct vector * gv,
         assert(zv->n == n);
         assert(zpv->n == n);
 
-        const v2d * g = (v2d*)gv->x, 
+        const v2d * g = (v2d*)gv->x,
                 * z = (v2d*)zv->x, * zp = (v2d*)zpv->x;
 
         v2d acc = {0,0};
@@ -740,7 +740,7 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                         double initial = value(approx, &state->z);
                         double now = value(approx, &state->zp);
                         if (now > initial+expected_improvement) {
-                                state->step_length = .5*step_length;
+                                state->step_length = .9*step_length;
                         } else {
                                 state->step_length = step_length*1.01;
                                 break;
@@ -860,7 +860,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         gradient(&state.g, approx, &state.violation,
                                  &state.x, &value);
                         pg = project_gradient_norm(&state.g, &state.x,
-                                                   approx->lower, 
+                                                   approx->lower,
                                                    approx->upper);
                         delta = (diff(prev_x, state.x.x, n)
                                  /(norm_2(&state.x)+1e-10));
@@ -918,7 +918,7 @@ sparse_matrix_t random_matrix(size_t nrows, size_t ncolumns)
         uint32_t * columns = calloc(total, sizeof(uint32_t));
         uint32_t * rows = calloc(total, sizeof(uint32_t));
         double * values = calloc(total, sizeof(double));
-        
+
         for (size_t row = 0; row < nrows; row++) {
                 for (size_t column = 0; column < ncolumns; column++) {
                         if (((1.0*random()/RAND_MAX) < .5)

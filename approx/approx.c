@@ -312,6 +312,38 @@ static void compute_violation(struct vector * xv, approx_t approx)
         xv->violationp = 1;
 }
 
+static double value(approx_t approx, struct vector * xv)
+{
+        size_t nvars = xv->n;
+        size_t nrows = xv->nviolation;
+
+        assert(nvars == approx->nvars);
+        assert(nrows == approx->nrhs);
+
+#ifndef NO_CACHING
+        if (!xv->violationp)
+#endif
+                compute_violation(xv, approx);
+
+        double value;
+        {
+                const v2d * weight = (v2d*)approx->weight;
+                v2d * viol = (v2d*)xv->violation;
+
+                v2d acc = {0, 0};
+                size_t n = (nrows+1)/2;
+                for (size_t i = 0; i < n; i++) {
+                        v2d v = viol[i];
+                        v2d w = weight[i];
+                        v2d scaled = v*w;
+                        acc += v*scaled;
+                }
+                value = .5*(acc[0]+acc[1]);
+        }
+        
+        return value+dot(approx->linear, xv);
+}
+
 static void gradient(struct vector * OUT_grad,
                      approx_t approx, struct vector * OUT_scaled,
                      struct vector * xv, double * OUT_value)

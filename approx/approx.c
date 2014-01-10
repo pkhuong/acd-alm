@@ -567,7 +567,7 @@ long_step(struct vector * zpv, double theta, double length,
         assert(length >= 1);
         double inv_theta = (length-1e-6)/theta;
         v2d itheta = {inv_theta, inv_theta};
-        v2d theta2 = {theta, theta};
+        v2d theta2 = {theta/length, theta/length};
         v2ul mask = {~(1ull<<63), ~(1ull<<63)};
 #ifndef UNSAFE_DESCENT_STEP
         v2d huge = {HUGE_VAL, HUGE_VAL};
@@ -599,11 +599,11 @@ long_step(struct vector * zpv, double theta, double length,
                 linear_estimate += gi*delta;
                 quad_estimate += delta*delta*theta2*vi;
         }
-        assert(max(max_z[0], max_z[1]) < HUGE_VAL);
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
+        assert(isfinite(max(max_z[0], max_z[1])));
         return ((linear_estimate[0]+linear_estimate[1])
-                +.5*(quad_estimate[0]+quad_estimate[2]));
+                +.5*(quad_estimate[0]+quad_estimate[1]));
 }
 
 static double next_theta(double theta)
@@ -715,15 +715,18 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 double * values[2] = {&state->value, NULL};
                 gradient2(g, approx, violation, x, values);
         }
-        
+
         while (1) {
                 double step_length = state->step_length;
+#ifdef STATIC_STEP
+                step_length = 1;
+#endif
                 if (1 == step_length) {
                         step(&state->zp, state->theta,
                              &state->g2, &state->z,
                              approx->lower, approx->upper,
                              approx->inv_v);
-                        state->step_length = 1.01;
+                        state->step_length = 1.0005;
                         break;
                 } else {
                         double expected_improvement
@@ -735,10 +738,9 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                         double initial = value(approx, &state->z);
                         double now = value(approx, &state->zp);
                         if (now > initial+expected_improvement) {
-                                state->step_length = max(1, step_length/2);
+                                state->step_length = max(1, .9*step_length);
                         } else {
-                                state->step_length = min(step_length*1.01,
-                                                         2);
+                                state->step_length = step_length*1.01;
                                 break;
                         }
                 }

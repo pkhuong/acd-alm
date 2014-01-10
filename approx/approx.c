@@ -529,16 +529,20 @@ static double project_gradient_norm(const struct vector * gv,
 {
         size_t n = gv->n;
         assert(xv->n == n);
-        const double * g = gv->x, * x = xv->x;
-        double acc = 0;
-        for (size_t i = 0; i < n; i++) {
-                double xi = x[i];
-                double xp = xi-g[i];
-                xp = min(max(lower[i], xp), upper[i]);
-                double delta = xi-xp;
+        const v2d * g = (v2d*)gv->x, * x = (v2d*)xv->x,
+                * l = (v2d*)lower, * u = (v2d*)upper;
+
+        v2d acc = {0, 0};
+        size_t vector_n = (n+1)/2;
+        for (size_t i = 0; i < vector_n; i++) {
+                v2d xi = x[i];
+                v2d xp = xi-g[i];
+                xp = __builtin_ia32_maxpd(l[i], xp);
+                xp = __builtin_ia32_minpd(u[i], xp);
+                v2d delta = xi-xp;
                 acc += delta*delta;
         }
-        return sqrt(acc);
+        return sqrt(acc[0]+acc[1]);
 }
 
 struct approx_state

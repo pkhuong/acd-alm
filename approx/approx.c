@@ -441,10 +441,14 @@ static inline double max(double x, double y)
 static void project(struct vector * xv,
                     const double * lower, const double * upper)
 {
-        size_t n = xv->n;
-        double * x = xv->x;
-        for (size_t i = 0; i < n; i++)
-                x[i] = min(max(lower[i], x[i]), upper[i]);
+        size_t n = (xv->n+1)/2;
+        v2d * x = (v2d*)xv->x;
+        const v2d * l = (const v2d*)lower, * u = (const v2d*)upper;
+        for (size_t i = 0; i < n; i++) {
+                v2d clamp_low = __builtin_ia32_maxpd(l[i], x[i]);
+                v2d clamp_high = __builtin_ia32_minpd(clamp_low, u[i]);
+                x[i] = clamp_high;
+        }
 }
 
 static void step(struct vector * zpv, double theta,

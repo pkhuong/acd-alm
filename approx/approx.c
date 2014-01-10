@@ -512,13 +512,15 @@ static double dot_diff(const struct vector * gv,
         assert(zv->n == n);
         assert(zpv->n == n);
 
-        const double * g = gv->x, * z = zv->x, * zp = zpv->x;
+        const v2d * g = (v2d*)gv->x, 
+                * z = (v2d*)zv->x, * zp = (v2d*)zpv->x;
 
-        double acc = 0;
-        for (size_t i = 0; i < n; i++)
+        v2d acc = {0,0};
+        size_t vector_n = (n+1)/2;
+        for (size_t i = 0; i < vector_n; i++)
                 acc += g[i]*(zp[i]-z[i]);
 
-        return acc;
+        return acc[0]+acc[1];
 }
 
 static double project_gradient_norm(const struct vector * gv,

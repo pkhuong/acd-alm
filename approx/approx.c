@@ -351,9 +351,10 @@ static void gradient(struct vector * OUT_grad,
                                            1));
 
         {
-                double * grad = OUT_grad->x;
-                const double * linear = approx->linear;
-                for (size_t i = 0; i < nvars; i++)
+                v2d * grad = (v2d*)OUT_grad->x;
+                const v2d * linear = (v2d*)approx->linear;
+                size_t n = (nvars+1)/2;
+                for (size_t i = 0; i < n; i++)
                         grad[i] += linear[i];
         }
 

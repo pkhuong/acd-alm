@@ -299,9 +299,10 @@ static void compute_violation(struct vector * xv, approx_t approx)
 
         assert(0 == sparse_matrix_multiply(xv->violation, nrows,
                                            approx->matrix, xv->x, nvars, 0));
-        const double * rhs = approx->rhs;
-        double * viol = xv->violation;
-        for (size_t i = 0; i < nrows; i++)
+        const v2d * rhs = (v2d*)approx->rhs;
+        v2d * viol = (v2d*)xv->violation;
+        size_t n = (nrows+1)/2;
+        for (size_t i = 0; i < n; i++)
                 viol[i] -= rhs[i];
         xv->violationp = 1;
 }

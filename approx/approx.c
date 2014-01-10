@@ -239,6 +239,7 @@ static void destroy_vector(struct vector * x)
 }
 
 typedef double v2d __attribute__ ((vector_size (16)));
+typedef uint64_t v2ul __attribute__ ((vector_size (16)));
 
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,
@@ -459,23 +460,41 @@ static void step(struct vector * zpv, double theta,
         size_t n = zpv->n;
         assert(gv->n == n);
         assert(zv->n == n);
-        double * restrict zp = zpv->x;
-        const double * restrict g = gv->x, * restrict z = zv->x;
-        double max_z = 0;
-        double inv_theta = (1-1e-6)/theta; /* protect vs rounding */
-        for (size_t i = 0; i < n; i++) {   /* errors. */
-                double gi = g[i], zi = z[i],
-                        li = lower[i], ui = upper[i],
-                        inv_vi = inv_v[i];
-                double step = inv_theta*inv_vi;
+
+        size_t vector_n = (n+1)/2;
+        v2d * zp = (v2d*)zpv->x;
+        const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
+                * l = (const v2d*)lower, * u = (const v2d*)upper,
+                * iv = (const v2d*)inv_v;
+        v2d max_z = {0,0};
+        double inv_theta = (1-1e-6)/theta;   /* protect vs rounding */
+        v2d itheta = {inv_theta, inv_theta}; /* errors. */
+        v2ul mask = {~(1ull<<63), ~(1ull<<63)};
 #ifndef UNSAFE_DESCENT_STEP
-                step = ((step >= HUGE_VAL) && (gi == 0))?0:step;
+        v2d huge = {HUGE_VAL, HUGE_VAL};
+        v2d zero = {0, 0};
 #endif
-                double trial = zi - gi*step;
-                zp[i] = trial = min(max(li, trial), ui);
-                max_z = max(max_z, fabs(trial));
+        for (size_t i = 0; i < vector_n; i++) {
+                v2d gi = g[i], zi = z[i],
+                        li = l[i], ui = u[i],
+                        inv_vi = iv[i];
+                v2d step = itheta*inv_vi;
+#ifndef UNSAFE_DESCENT_STEP
+                {
+                        v2ul is_huge = (step >= huge);
+                        v2ul is_zero = (gi == zero);
+                        v2ul mask = ~(is_huge & is_zero);
+                        step = (v2d)((v2ul)step & mask);
+                }
+#endif
+                v2d trial = zi - gi*step;
+                trial = __builtin_ia32_maxpd(li, trial);
+                trial = __builtin_ia32_minpd(ui, trial);
+                zp[i] = trial;
+                max_z = __builtin_ia32_maxpd(max_z,
+                                             (v2d)((v2ul)trial&mask));
         }
-        assert(max_z < HUGE_VAL);
+        assert(max(max_z[0], max_z[1]) < HUGE_VAL);
         zpv->violationp = 0; /* cache is now invalid */
 }
 

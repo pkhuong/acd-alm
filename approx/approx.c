@@ -61,6 +61,7 @@ struct approx {
         double * lower, * upper; /* box */
 
         uint32_t * beta;
+        double * v;
         double * inv_v;
 };
 
@@ -104,6 +105,7 @@ approx_t approx_make(sparse_matrix_t constraints,
         approx->upper = copy_double_default(upper, nvars, HUGE_VAL);
 
         approx->beta = large_calloc(nrhs, sizeof(uint32_t));
+        approx->v = large_calloc(nvars, sizeof(double));
         approx->inv_v = large_calloc(nvars, sizeof(double));
 
         approx_update_step_sizes(approx);
@@ -139,6 +141,7 @@ int approx_free(approx_t approx)
         large_free(approx->lower, nvars, sizeof(double));
         large_free(approx->upper, nvars, sizeof(double));
         large_free(approx->beta, nrhs, sizeof(double));
+        large_free(approx->v, nvars, sizeof(double));
         large_free(approx->inv_v, nvars, sizeof(double));
         memset(approx, 0, sizeof(struct approx));
         free(approx);
@@ -152,10 +155,10 @@ int approx_update_step_sizes(approx_t approx)
         assert(approx->nvars == sparse_matrix_ncolumns(approx->matrix));
 
         uint32_t * beta = approx->beta;
-        double * inv_v = approx->inv_v;
+        double * v = approx->v;
         const double * weight = approx->weight;
         memset(beta, 0, approx->nrhs*sizeof(uint32_t));
-        memset(inv_v, 0, approx->nvars*sizeof(double));
+        memset(v, 0, approx->nvars*sizeof(double));
 
         sparse_matrix_t matrix = approx->matrix;
         size_t nnz = sparse_matrix_nnz(matrix);
@@ -170,14 +173,15 @@ int approx_update_step_sizes(approx_t approx)
         /* for 1/2 |weight (*) (Ax-b)|^2: weight_j *(A_ij)^2 */
         for (size_t i = 0; i < nnz; i++) {
                 uint32_t row = rows[i];
-                double vi = values[i];
+                double value = values[i];
                 double w = weight[row];
-                inv_v[columns[i]] += w*beta[row]*vi*vi;
+                v[columns[i]] += w*beta[row]*value*value;
         }
 
         size_t nvars = approx->nvars;
+        double * inv_v = approx->inv_v;
         for (size_t i = 0; i < nvars; i++)
-                inv_v[i] = 1.0/inv_v[i];
+                inv_v[i] = 1.0/v[i];
 
         return 0;
 }

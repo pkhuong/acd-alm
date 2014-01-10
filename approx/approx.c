@@ -601,9 +601,10 @@ long_step(struct vector * zpv, double theta, double length,
         }
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
-        assert(isfinite(max(max_z[0], max_z[1])));
-        return ((linear_estimate[0]+linear_estimate[1])
-                +.5*(quad_estimate[0]+quad_estimate[1]));
+        if (isfinite(max(max_z[0], max_z[1])))
+                return ((linear_estimate[0]+linear_estimate[1])
+                        +.5*(quad_estimate[0]+quad_estimate[1]));
+        return -HUGE_VAL; /* Might be a finite precision problem. fail */
 }
 
 static double next_theta(double theta)

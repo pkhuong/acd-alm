@@ -192,6 +192,7 @@ struct vector {
         size_t n;
         size_t nviolation;
         int violationp;
+        double value;
 };
 
 static void init_vector(struct vector * x, size_t n, size_t nviolation)
@@ -206,6 +207,7 @@ static void init_vector(struct vector * x, size_t n, size_t nviolation)
                 x->nviolation = 0;
         }
         x->violationp = 0;
+        x->value = nan("");
 }
 
 static void copy_vector(struct vector * x, const struct vector * y)
@@ -223,6 +225,7 @@ static void copy_vector(struct vector * x, const struct vector * y)
         } else {
                 x->violationp = 0;
         }
+        x->value = y->value;
 }
 
 static void project(struct vector * xv,
@@ -281,6 +284,7 @@ static void linterp(struct vector * OUT_yv, double theta,
         } else {
                 OUT_yv->violationp = 0;
         }
+        OUT_yv->value = nan("");
 }
 
 static double dot(const double * xp, const struct vector * yv)
@@ -320,6 +324,11 @@ static double value(approx_t approx, struct vector * xv)
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
 
+        {
+                double value = xv->value;
+                if (!isnan(value)) return value;
+        }
+
 #ifndef NO_CACHING
         if (!xv->violationp)
 #endif
@@ -341,7 +350,7 @@ static double value(approx_t approx, struct vector * xv)
                 value = .5*(acc[0]+acc[1]);
         }
         
-        return value+dot(approx->linear, xv);
+        return xv->value = value+dot(approx->linear, xv);
 }
 
 static void gradient(struct vector * OUT_grad,
@@ -532,6 +541,68 @@ static void step(struct vector * zpv, double theta,
         }
         assert(max(max_z[0], max_z[1]) < HUGE_VAL);
         zpv->violationp = 0; /* cache is now invalid */
+        zpv->value = nan("");
+}
+
+/*
+ * f(x) ~= f(z) + g'x + \sum_i (theta v_i)/2 (x-z)^2_i
+ *   min in z_i - 1/(theta v_i) g_i
+ */
+static double 
+long_step(struct vector * zpv, double theta, double length,
+          const struct vector * gv, const struct vector * zv,
+          const double * restrict lower, const double * restrict upper,
+          const double * restrict inv_v, const double * restrict vs)
+{
+        size_t n = zpv->n;
+        assert(gv->n == n);
+        assert(zv->n == n);
+
+        size_t vector_n = (n+1)/2;
+        v2d * zp = (v2d*)zpv->x;
+        const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
+                * l = (const v2d*)lower, * u = (const v2d*)upper,
+                * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
+        v2d max_z = {0,0};
+        double inv_theta = length/theta;   /* protect vs rounding */
+        v2d itheta = {inv_theta, inv_theta}; /* errors. */
+        v2d theta2 = {theta, theta};
+        v2ul mask = {~(1ull<<63), ~(1ull<<63)};
+#ifndef UNSAFE_DESCENT_STEP
+        v2d huge = {HUGE_VAL, HUGE_VAL};
+        v2d zero = {0, 0};
+#endif
+        v2d linear_estimate = {0, 0};
+        v2d quad_estimate = {0, 0};
+        for (size_t i = 0; i < vector_n; i++) {
+                v2d gi = g[i], zi = z[i],
+                        li = l[i], ui = u[i],
+                        inv_vi = iv[i],
+                        vi = v[i];
+                v2d step = itheta*inv_vi;
+#ifndef UNSAFE_DESCENT_STEP
+                {
+                        v2ul is_huge = (step >= huge);
+                        v2ul is_zero = (gi == zero);
+                        v2ul mask = ~(is_huge & is_zero);
+                        step = (v2d)((v2ul)step & mask);
+                }
+#endif
+                v2d delta = gi*step;
+                v2d trial = zi - delta;
+                trial = __builtin_ia32_maxpd(li, trial);
+                trial = __builtin_ia32_minpd(ui, trial);
+                zp[i] = trial;
+                max_z = __builtin_ia32_maxpd(max_z,
+                                             (v2d)((v2ul)trial&mask));
+                linear_estimate -= gi*delta;
+                quad_estimate += delta*delta*theta2*vi;
+        }
+        assert(max(max_z[0], max_z[1]) < HUGE_VAL);
+        zpv->violationp = 0; /* cache is now invalid */
+        zpv->value = nan("");
+        return ((linear_estimate[0]+linear_estimate[1])
+                +.5*(quad_estimate[0]+quad_estimate[2]));
 }
 
 static double next_theta(double theta)

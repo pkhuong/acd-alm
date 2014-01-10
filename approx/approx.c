@@ -564,8 +564,9 @@ long_step(struct vector * zpv, double theta, double length,
                 * l = (const v2d*)lower, * u = (const v2d*)upper,
                 * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
         v2d max_z = {0,0};
-        double inv_theta = length/theta;   /* protect vs rounding */
-        v2d itheta = {inv_theta, inv_theta}; /* errors. */
+        assert(length >= 1);
+        double inv_theta = (length-1e-6)/theta;
+        v2d itheta = {inv_theta, inv_theta};
         v2d theta2 = {theta, theta};
         v2ul mask = {~(1ull<<63), ~(1ull<<63)};
 #ifndef UNSAFE_DESCENT_STEP
@@ -588,14 +589,14 @@ long_step(struct vector * zpv, double theta, double length,
                         step = (v2d)((v2ul)step & mask);
                 }
 #endif
-                v2d delta = gi*step;
-                v2d trial = zi - delta;
+                v2d trial = zi - gi*step;
                 trial = __builtin_ia32_maxpd(li, trial);
                 trial = __builtin_ia32_minpd(ui, trial);
                 zp[i] = trial;
                 max_z = __builtin_ia32_maxpd(max_z,
                                              (v2d)((v2ul)trial&mask));
-                linear_estimate -= gi*delta;
+                v2d delta = trial - zi;
+                linear_estimate += gi*delta;
                 quad_estimate += delta*delta*theta2*vi;
         }
         assert(max(max_z[0], max_z[1]) < HUGE_VAL);
@@ -664,6 +665,8 @@ struct approx_state
         struct vector g, g2;
         struct vector violation, violation2;
         double value;
+
+        double step_length;
 };
 
 static void init_state(struct approx_state * state,
@@ -681,6 +684,8 @@ static void init_state(struct approx_state * state,
         init_vector(&state->violation, nrows, 0);
         init_vector(&state->violation2, nrows, 0);
         state->value = HUGE_VAL;
+
+        state->step_length = 1;
 }
 
 static void destroy_state(struct approx_state * state)
@@ -710,10 +715,34 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 double * values[2] = {&state->value, NULL};
                 gradient2(g, approx, violation, x, values);
         }
-        step(&state->zp, state->theta,
-             &state->g2, &state->z,
-             approx->lower, approx->upper,
-             approx->inv_v);
+        
+        while (1) {
+                double step_length = state->step_length;
+                if (1 == step_length) {
+                        step(&state->zp, state->theta,
+                             &state->g2, &state->z,
+                             approx->lower, approx->upper,
+                             approx->inv_v);
+                        state->step_length = 1.01;
+                        break;
+                } else {
+                        double expected_improvement
+                                = long_step(&state->zp,
+                                            state->theta, step_length,
+                                            &state->g2, &state->z,
+                                            approx->lower, approx->upper,
+                                            approx->inv_v, approx->v);
+                        double initial = value(approx, &state->z);
+                        double now = value(approx, &state->zp);
+                        if (now > initial+expected_improvement) {
+                                state->step_length = max(1, step_length/2);
+                        } else {
+                                state->step_length = min(step_length*1.01,
+                                                         2);
+                                break;
+                        }
+                }
+        }
 
         *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                         approx->lower, approx->upper);
@@ -764,15 +793,16 @@ static double norm_2(const struct vector * xv)
 }
 
 static void print_log(FILE * log, size_t k,
-                      double value, double ng, double pg, double diff)
+                      double value, double ng, double pg,
+                      double step, double diff)
 {
         if (log == NULL) return;
 
         if (diff < HUGE_VAL)
-                fprintf(log, "\t%10zu %12g %12g %12g %12g\n",
-                        k, value, ng, pg, diff);
-        else   fprintf(log, "\t%10zu %12g %12g %12g\n",
-                       k, value, ng, pg);
+                fprintf(log, "\t%10zu %12g %12g %12g %8g %12g\n",
+                        k, value, ng, pg, step, diff);
+        else   fprintf(log, "\t%10zu %12g %12g %12g %8g\n",
+                       k, value, ng, pg, step);
 }
 
 int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
@@ -850,14 +880,16 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                 restart = 0;
                                 printf("\n");
                         }
-                        print_log(log, i+1, value+offset, ng, pg, delta);
+                        print_log(log, i+1, value+offset, ng, pg,
+                                  state.step_length, delta);
                 }
         }
         if (restart) {
                 restart = 0;
                 printf("\n");
         }
-        print_log(log, i+1, value+offset, ng, pg, delta);
+        print_log(log, i+1, value+offset, ng, pg,
+                  state.step_length, delta);
 
         memcpy(x, center->x, n*sizeof(double));
         if (OUT_diagnosis != NULL) {

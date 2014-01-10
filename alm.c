@@ -249,7 +249,7 @@ static int iter(struct alm_state * state, alm_t alm,
         double offset = penalise_linear(alm, lambda);
         double diag[5];
         int reason = approx_solve(x, alm->nvars, alm->approx, -1u,
-                                  state->precision, -HUGE_VAL, 1e-12,
+                                  state->precision, -HUGE_VAL, 1e-11,
                                   log, 10000, diag, offset);
         violation(state->violation, alm, x);
         double max_viol = norm_inf(state->violation, alm->nrhs, NULL);

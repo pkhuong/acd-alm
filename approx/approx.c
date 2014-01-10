@@ -720,7 +720,7 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
         for (int i = 0; i < 2; i++) {
                 double step_length = state->step_length;
 #ifdef STATIC_STEP
-                step_length = 1;
+                step_length = state->step_length = 1;
 #endif
                 if (i || (step_length <= 1)) {
                         step(&state->zp, state->theta,

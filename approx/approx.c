@@ -717,17 +717,18 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 gradient2(g, approx, violation, x, values);
         }
 
-        while (1) {
+        for (int i = 0; i < 2; i++) {
                 double step_length = state->step_length;
 #ifdef STATIC_STEP
                 step_length = 1;
 #endif
-                if (1 == step_length) {
+                if (i || (step_length <= 1)) {
                         step(&state->zp, state->theta,
                              &state->g2, &state->z,
                              approx->lower, approx->upper,
                              approx->inv_v);
-                        state->step_length = 1.0005;
+                        if (i == 0)
+                                state->step_length *= 1.01;
                         break;
                 } else {
                         double expected_improvement
@@ -739,7 +740,7 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                         double initial = value(approx, &state->z);
                         double now = value(approx, &state->zp);
                         if (now > initial+expected_improvement) {
-                                state->step_length = max(1, .9*step_length);
+                                state->step_length = .5*step_length;
                         } else {
                                 state->step_length = step_length*1.01;
                                 break;

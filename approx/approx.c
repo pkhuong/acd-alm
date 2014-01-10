@@ -646,14 +646,14 @@ static double diff(const double * x, const double * y, size_t n)
 
 static double norm_2(const struct vector * xv)
 {
-        size_t n = xv->n;
-        const double * x = xv->x;
-        double acc = 0;
+        size_t n = (xv->n+1)/2;
+        const v2d * x = (v2d*)xv->x+1;
+        v2d acc = {0, 0};
         for (size_t i = 0; i < n; i++) {
-                double xi = x[i];
+                v2d xi = x[i];
                 acc += xi*xi;
         }
-        return sqrt(acc);
+        return sqrt(acc[0]+acc[1]);
 }
 
 static void print_log(FILE * log, size_t k,

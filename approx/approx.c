@@ -713,8 +713,9 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 struct vector * violation[2] = {&state->violation,
                                                 &state->violation2};
                 struct vector * x[2]= {&state->z, &state->y};
-                double * values[2] = {&state->value, NULL};
+                double * values[2] = {NULL, NULL};
                 gradient2(g, approx, violation, x, values);
+                state->value = value(approx, &state->z);
         }
 
         for (int i = 0; i < 2; i++) {

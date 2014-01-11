@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
-#include "../sparse-gemv/sparse-gemv.h"
+#include "../spmv/spmv.h"
 
 typedef struct approx * approx_t;
 

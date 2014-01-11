@@ -1,6 +1,6 @@
 #ifndef ALM_H
 #define ALM_H
-#include "sparse-gemv/sparse-gemv.h"
+#include "spmv/spmv.h"
 #include "approx/approx.h"
 #include <stddef.h>
 #include <stdio.h>

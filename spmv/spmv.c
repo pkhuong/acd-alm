@@ -1,4 +1,4 @@
-#include "sparse-gemv.h"
+#include "spmv.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -473,7 +473,7 @@ sparse_matrix_t sparse_matrix_read(FILE * stream)
         return m;
 }
 
-#ifdef TEST_SPARSE_GEMV
+#ifdef TEST_SPMV
 #include <stdlib.h>
 void fill_random_matrix(double * matrix, size_t nrows, size_t ncolumns,
                         double density)

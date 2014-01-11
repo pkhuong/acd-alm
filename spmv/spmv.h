@@ -1,5 +1,5 @@
-#ifndef SPARSE_GEMV_H
-#define SPARSE_GEMV_H
+#ifndef SPMV_H
+#define SPMV_H
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>

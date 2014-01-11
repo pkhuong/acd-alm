@@ -139,6 +139,14 @@ static int sparse_matrix_crs(sparse_matrix_t matrix, struct crs * crs,
                 crs->values[i] = entry->value;
         }
 
+        size_t max = 0;
+        size_t n = transpose?ncolumns:nrows;
+        for (size_t i = 0; i <= n; i++) {
+                if (crs->rows_indices[i] > max)
+                        max = crs->rows_indices[i];
+                crs->rows_indices[i] = max;
+        }
+
         free(entries);
 
         return 0;

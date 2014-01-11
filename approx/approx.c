@@ -1,10 +1,11 @@
+#define _GNU_SOURCE
+
 #include "approx.h"
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
 #include <string.h>
 #include <strings.h>
-
 #include <sys/mman.h>
 
 #if defined(MAP_HUGETLB) && defined(USE_MMAP)

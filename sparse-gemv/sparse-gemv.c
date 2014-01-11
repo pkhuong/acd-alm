@@ -279,17 +279,45 @@ static void mult_crs(double * out, struct crs * crs, const double * x)
         const uint32_t * rows_indices = crs->rows_indices,
                 * columns = crs->columns;
         const double * values = crs->values;
-        for (size_t i = 0; i < nrows; i++) {
+        size_t ncoupled_rows = nrows&(~1ull);
+        size_t i;
+        for (i = 0; i < ncoupled_rows; i+=2) {
+                uint32_t begin = rows_indices[i],
+                        middle = rows_indices[i+1],
+                        end = rows_indices[i+2];
+                double acc0 = 0, acc1 = 0;
+                uint32_t n0 = middle-begin, n1 = end-middle;
+                const double * v0 = values+begin,
+                        * v1 = values+middle;
+                const uint32_t * c0 = columns+begin,
+                        * c1 = columns+middle;
+                uint32_t j;
+                if (n0 <= n1) {
+                        for (j = 0; j < n0; j++) {
+                                acc0 += v0[j]*x[c0[j]];
+                                acc1 += v1[j]*x[c1[j]];
+                        }
+                        out[i] = acc0;
+                        for (; j < n1; j++)
+                                acc1 += v1[j]*x[c1[j]];
+                        out[i+1] = acc1;
+                } else {
+                        for (j = 0; j < n1; j++) {
+                                acc0 += v0[j]*x[c0[j]];
+                                acc1 += v1[j]*x[c1[j]];
+                        }
+                        out[i+1] = acc1;
+                        for (; j < n0; j++)
+                                acc0 += v0[j]*x[c0[j]];
+                        out[i] = acc0;
+                }
+        }
+        if (i < nrows) {
                 uint32_t begin = rows_indices[i],
                         end = rows_indices[i+1];
                 double acc = 0;
-                for (; begin < end; begin++) {
+                for (; begin < end; begin++)
                         acc += values[begin]*x[columns[begin]];
-#if PREFETCH_DISTANCE
-                        _mm_prefetch(x+columns[begin+PREFETCH_DISTANCE],
-                                      PREFETCH_TYPE);
-#endif
-                }
                 out[i] = acc;
         }
 }
@@ -302,7 +330,54 @@ static void mult_crs2(double ** out, struct crs * crs, const double ** x)
         const double * values = crs->values;
         double * out0 = out[0], * out1 = out[1];
         const double * x0 = x[0], * x1 = x[1];
-        for (size_t i = 0; i < nrows; i++) {
+        size_t ncoupled_rows = nrows&(~1ull);
+        size_t i;
+        for (i = 0; i < ncoupled_rows; i+=2) {
+                uint32_t begin = rows_indices[i],
+                        middle = rows_indices[i+1],
+                        end = rows_indices[i+2];
+                double acc0_0 = 0, acc1_0 = 0; /* x0 */
+                double acc0_1 = 0, acc1_1 = 0; /* x1 */
+                uint32_t n0 = middle-begin, n1 = end-middle;
+                const double * v0 = values+begin,
+                        * v1 = values+middle;
+                const uint32_t * c0 = columns+begin,
+                        * c1 = columns+middle;
+                uint32_t j;
+                if (n0 <= n1) {
+                        for (j = 0; j < n0; j++) {
+                                acc0_0 += v0[j]*x0[c0[j]];
+                                acc1_0 += v1[j]*x0[c1[j]];
+                                acc0_1 += v0[j]*x1[c0[j]];
+                                acc1_1 += v1[j]*x1[c1[j]];
+                        }
+                        out0[i] = acc0_0;
+                        out1[i] = acc0_1;
+                        for (; j < n1; j++) {
+                                acc1_0 += v1[j]*x0[c1[j]];
+                                acc1_1 += v1[j]*x1[c1[j]];
+                        }
+                        out0[i+1] = acc1_0;
+                        out1[i+1] = acc1_1;
+                } else {
+                        for (j = 0; j < n1; j++) {
+                                acc0_0 += v0[j]*x0[c0[j]];
+                                acc1_0 += v1[j]*x0[c1[j]];
+                                acc0_1 += v0[j]*x1[c0[j]];
+                                acc1_1 += v1[j]*x1[c1[j]];
+                        }
+                        out0[i+1] = acc1_0;
+                        out1[i+1] = acc1_1;
+                        for (; j < n0; j++) {
+                                acc0_0 += v0[j]*x0[c0[j]];
+                                acc0_1 += v0[j]*x1[c0[j]];
+                        }
+                        out0[i] = acc0_0;
+                        out1[i] = acc0_1;
+                }
+        }
+
+        if (i < nrows) {
                 uint32_t begin = rows_indices[i],
                         end = rows_indices[i+1];
                 double acc0 = 0, acc1 = 0;
@@ -311,12 +386,6 @@ static void mult_crs2(double ** out, struct crs * crs, const double ** x)
                         uint32_t col = columns[begin];
                         acc0 += v*x0[col];
                         acc1 += v*x1[col];
-#if PREFETCH_DISTANCE
-                        _mm_prefetch(x0+columns[begin+PREFETCH_DISTANCE],
-                                      PREFETCH_TYPE);
-                        _mm_prefetch(x1+columns[begin+PREFETCH_DISTANCE],
-                                      PREFETCH_TYPE);
-#endif
                 }
                 out0[i] = acc0;
                 out1[i] = acc1;

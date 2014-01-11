@@ -439,7 +439,7 @@ static void gradient2(struct vector ** OUT_grad,
                         if (OUT_value[i] == NULL) {
                                 for (size_t i = 0; i < n; i++)
                                         scaled[i] = weight[i]*viol[i];
-                        } else  {
+                        } else {
                                 v2d value = {0,0};
                                 for (size_t i = 0; i < n; i++) {
                                         v2d v = viol[i];

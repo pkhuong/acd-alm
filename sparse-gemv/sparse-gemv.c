@@ -13,7 +13,7 @@
                 (Y) = temp;                     \
         } while (0)
 
-struct crs
+struct csr
 {
         size_t nrows;
         uint32_t * rows_indices;
@@ -25,21 +25,21 @@ struct crs
 # define PREFETCH_DISTANCE 0
 #endif
 
-static int init_crs(struct crs * crs, size_t nrows, size_t nnz)
+static int init_csr(struct csr * csr, size_t nrows, size_t nnz)
 {
-        crs->nrows = nrows;
-        crs->rows_indices = calloc(nrows+1, sizeof(uint32_t));
-        crs->columns = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
-        crs->values = calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
+        csr->nrows = nrows;
+        csr->rows_indices = calloc(nrows+1, sizeof(uint32_t));
+        csr->columns = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
+        csr->values = calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
         return 0;
 }
 
-static void free_crs(struct crs * crs)
+static void free_csr(struct csr * csr)
 {
-        free(crs->rows_indices);
-        free(crs->columns);
-        free(crs->values);
-        memset(crs, 0, sizeof(struct crs));
+        free(csr->rows_indices);
+        free(csr->columns);
+        free(csr->values);
+        memset(csr, 0, sizeof(struct csr));
 }
 
 struct sparse_matrix
@@ -47,8 +47,8 @@ struct sparse_matrix
         size_t ncolumns, nrows, nnz;
         uint32_t * rows, * columns;
         double * values;
-        struct crs matrix;
-        struct crs transpose;
+        struct csr matrix;
+        struct csr transpose;
 };
 
 #define DEF(TYPE, FIELD)                        \
@@ -97,7 +97,7 @@ static int compare_matrix_entries(const void * xp, const void * yp)
         return 0;
 }
 
-static int sparse_matrix_crs(sparse_matrix_t matrix, struct crs * crs,
+static int sparse_matrix_csr(sparse_matrix_t matrix, struct csr * csr,
                              int transpose)
 {
         uint32_t * columns = matrix->columns;
@@ -108,7 +108,7 @@ static int sparse_matrix_crs(sparse_matrix_t matrix, struct crs * crs,
                 ncolumns = matrix->ncolumns,
                 nrows = matrix->nrows;
 
-        /* QUite possible the stupidest way to construct a CRS matrix */
+        /* QUite possible the stupidest way to construct a CSR matrix */
         struct matrix_entry * entries
                 = calloc(nnz, sizeof(struct matrix_entry));
         for (size_t i = 0; i < nnz; i++) {
@@ -130,21 +130,21 @@ static int sparse_matrix_crs(sparse_matrix_t matrix, struct crs * crs,
               nnz, sizeof(struct matrix_entry),
               compare_matrix_entries);
 
-        init_crs(crs, transpose?ncolumns:nrows, nnz);
+        init_csr(csr, transpose?ncolumns:nrows, nnz);
 
         for (size_t i = 0; i < nnz; i++) {
                 struct matrix_entry * entry = entries+i;
-                crs->rows_indices[entry->row+1]=i+1;
-                crs->columns[i] = entry->column;
-                crs->values[i] = entry->value;
+                csr->rows_indices[entry->row+1]=i+1;
+                csr->columns[i] = entry->column;
+                csr->values[i] = entry->value;
         }
 
         size_t max = 0;
         size_t n = transpose?ncolumns:nrows;
         for (size_t i = 0; i <= n; i++) {
-                if (crs->rows_indices[i] > max)
-                        max = crs->rows_indices[i];
-                crs->rows_indices[i] = max;
+                if (csr->rows_indices[i] > max)
+                        max = csr->rows_indices[i];
+                csr->rows_indices[i] = max;
         }
 
         free(entries);
@@ -210,8 +210,8 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
         memcpy(matrix->columns, columns, nnz*sizeof(uint32_t));
         memcpy(matrix->values, values, nnz*sizeof(double));
 
-        sparse_matrix_crs(matrix, &matrix->matrix, 0);
-        sparse_matrix_crs(matrix, &matrix->transpose, 1);
+        sparse_matrix_csr(matrix, &matrix->matrix, 0);
+        sparse_matrix_csr(matrix, &matrix->transpose, 1);
         sparse_matrix_swizzle(matrix);
 
         return matrix;
@@ -222,8 +222,8 @@ int sparse_matrix_free(sparse_matrix_t matrix)
         free(matrix->rows);
         free(matrix->columns);
         free(matrix->values);
-        free_crs(&matrix->matrix);
-        free_crs(&matrix->transpose);
+        free_csr(&matrix->matrix);
+        free_csr(&matrix->transpose);
         memset(matrix, 0, sizeof(struct sparse_matrix));
         free(matrix);
 
@@ -273,12 +273,12 @@ static void mult2(double ** out,
         }
 }
 
-static void mult_crs(double * out, struct crs * crs, const double * x)
+static void mult_csr(double * out, struct csr * csr, const double * x)
 {
-        size_t nrows = crs->nrows;
-        const uint32_t * rows_indices = crs->rows_indices,
-                * columns = crs->columns;
-        const double * values = crs->values;
+        size_t nrows = csr->nrows;
+        const uint32_t * rows_indices = csr->rows_indices,
+                * columns = csr->columns;
+        const double * values = csr->values;
         size_t ncoupled_rows = nrows&(~1ull);
         size_t i;
         for (i = 0; i < ncoupled_rows; i+=2) {
@@ -322,12 +322,12 @@ static void mult_crs(double * out, struct crs * crs, const double * x)
         }
 }
 
-static void mult_crs2(double ** out, struct crs * crs, const double ** x)
+static void mult_csr2(double ** out, struct csr * csr, const double ** x)
 {
-        size_t nrows = crs->nrows;
-        const uint32_t * rows_indices = crs->rows_indices,
-                * columns = crs->columns;
-        const double * values = crs->values;
+        size_t nrows = csr->nrows;
+        const uint32_t * rows_indices = csr->rows_indices,
+                * columns = csr->columns;
+        const double * values = csr->values;
         double * out0 = out[0], * out1 = out[1];
         const double * x0 = x[0], * x1 = x[1];
         size_t ncoupled_rows = nrows&(~1ull);
@@ -409,12 +409,12 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
         assert(ny == nrows);
         assert(nx == ncolumns);
 #ifdef SWIZZLED_MULT
-        (void)mult_crs;
+        (void)mult_csr;
         memset(OUT_y, 0, sizeof(double)*ny);
         mult(OUT_y, a->nnz, columns, rows, a->values, x);
 #else
         (void)mult;
-        mult_crs(OUT_y, transpose?&a->transpose:&a->matrix, x);
+        mult_csr(OUT_y, transpose?&a->transpose:&a->matrix, x);
 #endif
         return 0;
 }
@@ -436,13 +436,13 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
         assert(ny == nrows);
         assert(nx == ncolumns);
 #ifdef SWIZZLED_MULT
-        (void)mult_crs2;
+        (void)mult_csr2;
         memset(OUT_y[0], 0, sizeof(double)*ny);
         memset(OUT_y[1], 0, sizeof(double)*ny);
         mult2(OUT_y, a->nnz, columns, rows, a->values, x);
 #else
         (void)mult2;
-        mult_crs2(OUT_y, transpose?&a->transpose:&a->matrix, x);
+        mult_csr2(OUT_y, transpose?&a->transpose:&a->matrix, x);
 #endif
         return 0;
 }

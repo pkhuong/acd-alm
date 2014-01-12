@@ -69,46 +69,35 @@ static void set_job(thread_pool_t pool, struct job * job)
         assert(pool->job == NULL);
         assert(pool->nactive == 0);
 
-        pthread_mutex_lock(&pool->lock);
+        __sync_fetch_and_add(&pool->job_sequence, 1);
         pool->job = job;
-        pool->job_sequence++;
-        pthread_cond_broadcast(&pool->new_job_queue);
-        pthread_mutex_unlock(&pool->lock);
+        __sync_synchronize();
 }
 
 static struct job * get_job(thread_pool_t pool)
 {
         struct job * job = NULL;
-        pthread_mutex_lock(&pool->lock);
         while (NULL == (job = pool->job))
-                pthread_cond_wait(&pool->new_job_queue, &pool->lock);
-        pool->nactive++;
-        pthread_mutex_unlock(&pool->lock);
+                __asm__("":::"memory");
+        __sync_fetch_and_add(&pool->nactive, 1);
+
         return job;
 }
 
 static void release_job(thread_pool_t pool, struct job * job, int master)
 {
-        pthread_mutex_lock(&pool->lock);
+        (void)master;
         assert(pool->nactive > 0);
         assert(pool->job == job);
         unsigned sequence = pool->job_sequence;
-        if (0 == --pool->nactive) {
+        unsigned nactive = __sync_sub_and_fetch(&pool->nactive, 1);
+        if (0 == nactive) {
                 pool->job = NULL;
-                pool->job_sequence++;
-                pthread_cond_broadcast(&pool->job_done_queue);
-        } else if (master) {
-                while (pool->nactive)
-                        pthread_cond_wait(&pool->job_done_queue,
-                                          &pool->lock);
+                __sync_fetch_and_add(&pool->job_sequence, 1);
         }
 
-        if (!master) {
-                while (pool->job_sequence == sequence)
-                        pthread_cond_wait(&pool->job_done_queue,
-                                          &pool->lock);
-        }
-        pthread_mutex_unlock(&pool->lock);
+        while (pool->job_sequence == sequence)
+                __asm__("":::"memory");
 }
 
 struct job
@@ -175,13 +164,11 @@ static void init_job(struct job * job,
 
 static void execute_job(thread_pool_t pool, struct job * job)
 {
-        pthread_mutex_lock(&pool->lock);
         assert(NULL == pool->job);
         assert(0 == pool->nactive);
+        __sync_fetch_and_add(&pool->job_sequence, 1);
         pool->job = job;
-        pool->nactive++;
-        pthread_cond_broadcast(&pool->new_job_queue);
-        pthread_mutex_unlock(&pool->lock);
+        __sync_fetch_and_add(&pool->nactive, 1);
 
         do_job(job, 0);
         release_job(pool, job, 1);

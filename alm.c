@@ -362,7 +362,7 @@ alm_t alm_read(FILE * stream)
 int main (int argc, char ** argv)
 {
         sparse_matrix_init();
-        unsigned nthreads = 1;
+        int nthreads = 1;
         assert(argc > 1);
         FILE * instance = fopen(argv[1], "r");
         alm_t alm = alm_read(instance);
@@ -370,7 +370,9 @@ int main (int argc, char ** argv)
         if (argc > 2)
                 nthreads = atoi(argv[2]);
 
-        thread_pool_t pool = thread_pool_init(nthreads);
+        thread_pool_t pool = NULL;
+        if (nthreads >= 0)
+                thread_pool_init(nthreads);
         double * x = calloc(alm_nvars(alm), sizeof(double)),
                 * y = calloc(alm_nrhs(alm), sizeof(double));
         alm_solve(alm, 1000, x, alm_nvars(alm),

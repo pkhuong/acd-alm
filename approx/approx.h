@@ -25,7 +25,7 @@ double * approx_upper(approx_t);
 
 int approx_free(approx_t);
 
-int approx_update_step_sizes(approx_t); /* Call after mods to matrix/weight */
+int approx_update_step_sizes(approx_t); /* Call after mods to objective */
 
 int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                  double max_pg, double max_value, double min_delta,

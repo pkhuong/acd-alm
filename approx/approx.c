@@ -181,8 +181,16 @@ int approx_update_step_sizes(approx_t approx)
 
         size_t nvars = approx->nvars;
         double * inv_v = approx->inv_v;
-        for (size_t i = 0; i < nvars; i++)
-                inv_v[i] = 1.0/v[i];
+        const double * c = approx->linear;
+        for (size_t i = 0; i < nvars; i++) {
+                double vi = v[i];
+                /* avoid 0*inf -> nan: if variable appears nowhere in
+                 * the obj fun, directional gradient = 0. Always leave it
+                 * in place by letting inv_v[i] = 1. */
+                if ((v == 0) && (c[i] == 0))
+                        inv_v[i] = 1;
+                else    inv_v[i] = 1.0/vi;
+        }
 
         return 0;
 }
@@ -516,23 +524,11 @@ static void step(struct vector * zpv, double theta,
         double inv_theta = (1-1e-6)/theta;   /* protect vs rounding */
         v2d itheta = {inv_theta, inv_theta}; /* errors. */
         v2ul mask = {~(1ull<<63), ~(1ull<<63)};
-#ifndef UNSAFE_DESCENT_STEP
-        v2d huge = {HUGE_VAL, HUGE_VAL};
-        v2d zero = {0, 0};
-#endif
         for (size_t i = 0; i < vector_n; i++) {
                 v2d gi = g[i], zi = z[i],
                         li = l[i], ui = u[i],
                         inv_vi = iv[i];
                 v2d step = itheta*inv_vi;
-#ifndef UNSAFE_DESCENT_STEP
-                {
-                        v2ul is_huge = (step >= huge);
-                        v2ul is_zero = (gi == zero);
-                        v2ul mask = ~(is_huge & is_zero);
-                        step = (v2d)((v2ul)step & mask);
-                }
-#endif
                 v2d trial = zi - gi*step;
                 trial = __builtin_ia32_maxpd(li, trial);
                 trial = __builtin_ia32_minpd(ui, trial);
@@ -570,10 +566,6 @@ long_step(struct vector * zpv, double theta, double length,
         v2d itheta = {inv_theta, inv_theta};
         v2d theta2 = {theta/length, theta/length};
         v2ul mask = {~(1ull<<63), ~(1ull<<63)};
-#ifndef UNSAFE_DESCENT_STEP
-        v2d huge = {HUGE_VAL, HUGE_VAL};
-        v2d zero = {0, 0};
-#endif
         v2d linear_estimate = {0, 0};
         v2d quad_estimate = {0, 0};
         for (size_t i = 0; i < vector_n; i++) {
@@ -582,14 +574,6 @@ long_step(struct vector * zpv, double theta, double length,
                         inv_vi = iv[i],
                         vi = v[i];
                 v2d step = itheta*inv_vi;
-#ifndef UNSAFE_DESCENT_STEP
-                {
-                        v2ul is_huge = (step >= huge);
-                        v2ul is_zero = (gi == zero);
-                        v2ul mask = ~(is_huge & is_zero);
-                        step = (v2d)((v2ul)step & mask);
-                }
-#endif
                 v2d trial = zi - gi*step;
                 trial = __builtin_ia32_maxpd(li, trial);
                 trial = __builtin_ia32_minpd(ui, trial);

@@ -206,7 +206,6 @@ static double update_weights(alm_t alm, const double * violation,
         if (max > .5*norm)
                 weights[max_i] *= 10;
 
-        approx_update_step_sizes(alm->approx);
         return norm;
 }
 
@@ -248,6 +247,7 @@ static int iter(struct alm_state * state, alm_t alm,
 {
         double offset = penalise_linear(alm, lambda);
         double diag[5];
+        approx_update_step_sizes(alm->approx);
         int reason = approx_solve(x, alm->nvars, alm->approx, -1u,
                                   state->precision, -HUGE_VAL, 1e-11,
                                   log, 10000, diag, offset);

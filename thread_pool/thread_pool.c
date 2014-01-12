@@ -177,11 +177,29 @@ static void execute_job(thread_pool_t pool, struct job * job)
         release_job(pool, job, 1);
 }
 
+static size_t ideal_granularity(size_t n, size_t minimum, unsigned nthreads)
+{
+        size_t scale = nthreads*nthreads;
+        size_t m = (n+scale-1)/scale;
+        size_t grains = ((m+minimum-1)/minimum);
+        if (grains == 0) grains = 1;
+        return minimum*grains;
+}
+
 void thread_pool_for(thread_pool_t pool,
                      size_t from, size_t end, size_t granularity,
                      thread_pool_function function, void * info)
 {
+        if ((pool == NULL)
+            || (0 == pool->nthreads)
+            || ((end - from) <= granularity)) {
+                function(from, end, info, 0);
+                return;
+        }
+
         struct job job;
-        init_job(&job, from, end, granularity, function, info);
+        init_job(&job, from, end, 
+                 ideal_granularity(end-from, granularity, pool->nthreads),
+                 function, info);
         execute_job(pool, &job);
 }

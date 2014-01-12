@@ -161,6 +161,7 @@ static void init_job(struct job * job,
                      size_t begin, size_t end, size_t granularity,
                      thread_pool_function function, void * info)
 {
+        if (granularity == 0) granularity = 1;
         job->id = begin;
         job->limit = end;
         job->increment = granularity;

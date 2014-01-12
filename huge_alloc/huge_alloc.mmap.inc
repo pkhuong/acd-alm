@@ -1,3 +1,4 @@
+#include <assert.h>
 static unsigned offset = 0;
 
 void * huge_calloc(size_t n, size_t size)

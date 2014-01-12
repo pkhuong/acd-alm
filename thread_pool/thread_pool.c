@@ -92,11 +92,11 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
         assert(pool->job == job);
         if (0 == --pool->nactive) {
                 pthread_cond_broadcast(&pool->job_done_queue);
+                pool->job = NULL;
         } else if (master) {
                 while (pool->nactive)
                         pthread_cond_wait(&pool->job_done_queue,
                                           &pool->lock);
-                pool->job = NULL;
         }
 
         if (!master) {

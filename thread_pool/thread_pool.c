@@ -49,6 +49,8 @@ static void set_job(thread_pool_t, struct job *);
 
 void thread_pool_free(thread_pool_t pool)
 {
+        if (pool == NULL) return;
+
         set_job(pool, (struct job*)-1ul);
 
         void * scratch;

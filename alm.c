@@ -378,7 +378,8 @@ int main (int argc, char ** argv)
         alm_solve(alm, 1000, x, alm_nvars(alm),
                   y, alm_nrhs(alm),
                   stdout, NULL, pool);
-        thread_pool_free(pool);
+        if (pool != NULL)
+                thread_pool_free(pool);
         free(y);
         free(x);
         sparse_matrix_free(alm_matrix(alm));

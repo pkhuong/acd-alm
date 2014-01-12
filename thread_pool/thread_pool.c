@@ -190,6 +190,7 @@ void thread_pool_for(thread_pool_t pool,
                      size_t from, size_t end, size_t granularity,
                      thread_pool_function function, void * info)
 {
+        assert(from <= end);
         if ((pool == NULL)
             || (0 == pool->nthreads)
             || ((end - from) <= granularity)) {

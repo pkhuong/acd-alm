@@ -16,6 +16,7 @@ struct thread_pool
         pthread_cond_t new_job_queue;
         pthread_cond_t job_done_queue;
         struct job * job;
+        unsigned job_sequence;
         unsigned worker_id_counter;
 };
 
@@ -70,6 +71,7 @@ static void set_job(thread_pool_t pool, struct job * job)
 
         pthread_mutex_lock(&pool->lock);
         pool->job = job;
+        pool->job_sequence++;
         pthread_cond_broadcast(&pool->new_job_queue);
         pthread_mutex_unlock(&pool->lock);
 }
@@ -90,9 +92,11 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
         pthread_mutex_lock(&pool->lock);
         assert(pool->nactive > 0);
         assert(pool->job == job);
+        unsigned sequence = pool->job_sequence;
         if (0 == --pool->nactive) {
-                pthread_cond_broadcast(&pool->job_done_queue);
                 pool->job = NULL;
+                pool->job_sequence++;
+                pthread_cond_broadcast(&pool->job_done_queue);
         } else if (master) {
                 while (pool->nactive)
                         pthread_cond_wait(&pool->job_done_queue,
@@ -100,8 +104,8 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
         }
 
         if (!master) {
-                while (pool->job != NULL)
-                        pthread_cond_wait(&pool->new_job_queue,
+                while (pool->job_sequence == sequence)
+                        pthread_cond_wait(&pool->job_done_queue,
                                           &pool->lock);
         }
         pthread_mutex_unlock(&pool->lock);

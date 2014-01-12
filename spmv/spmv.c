@@ -385,7 +385,7 @@ static void mult_csr_subrange(size_t from, size_t end, void * info,
         struct csr subcsr = *csr;
         subcsr.nrows = end-from;
         subcsr.rows_indices = csr->rows_indices+from;
-        mult_csr(out, &subcsr, x);
+        mult_csr(out+from, &subcsr, x);
 }
 
 static void mult_csr2(double ** out, struct csr * csr, const double ** x)
@@ -474,10 +474,11 @@ static void mult_csr2_subrange(size_t from, size_t end, void * info,
         struct csr * csr = info_struct->csr;
         const double ** x = info_struct->x;
 
+        double * out2[] = {out[0]+from, out[1]+from};
         struct csr subcsr = *csr;
         subcsr.nrows = end-from;
         subcsr.rows_indices = csr->rows_indices+from;
-        mult_csr2(out, &subcsr, x);
+        mult_csr2(out2, &subcsr, x);
 }
 
 #ifdef USE_OSKI
@@ -552,7 +553,7 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
                 info.out = OUT_y;
                 info.csr = transpose?&a->transpose:&a->matrix;
                 info.x = x;
-                thread_pool_for(pool, 0, 64, info.csr->nrows,
+                thread_pool_for(pool, 0, info.csr->nrows, 64,
                                 mult_csr_subrange, &info);
         } else {
                 mult_csr(OUT_y, transpose?&a->transpose:&a->matrix, x);
@@ -595,7 +596,7 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                 info.out = OUT_y;
                 info.csr = transpose?&a->transpose:&a->matrix;
                 info.x = x;
-                thread_pool_for(pool, 0, 64, info.csr->nrows,
+                thread_pool_for(pool, 0, info.csr->nrows, 64,
                                 mult_csr2_subrange, &info);
         } else {
                 mult_csr2(OUT_y, transpose?&a->transpose:&a->matrix, x);

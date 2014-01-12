@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <math.h>
 #include <xmmintrin.h>
+#include "../huge_alloc/huge_alloc.h"
 
 #ifdef USE_OSKI
 # include <oski/oski.h>
@@ -40,16 +41,16 @@ static int init_csr(struct csr * csr, size_t nrows, size_t nnz)
 {
         csr->nrows = nrows;
         csr->rows_indices = calloc(nrows+1, sizeof(uint32_t));
-        csr->columns = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
-        csr->values = calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
+        csr->columns = huge_calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
+        csr->values = huge_calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
         return 0;
 }
 
 static void free_csr(struct csr * csr)
 {
         free(csr->rows_indices);
-        free(csr->columns);
-        free(csr->values);
+        huge_free(csr->columns);
+        huge_free(csr->values);
         memset(csr, 0, sizeof(struct csr));
 }
 
@@ -218,9 +219,12 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
         matrix->ncolumns = ncolumns;
         matrix->nrows = nrows;
         matrix->nnz = nnz;
-        matrix->rows = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
-        matrix->columns = calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
-        matrix->values = calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
+        matrix->rows = huge_calloc(nnz+PREFETCH_DISTANCE,
+                                   sizeof(uint32_t));
+        matrix->columns = huge_calloc(nnz+PREFETCH_DISTANCE,
+                                      sizeof(uint32_t));
+        matrix->values = huge_calloc(nnz+PREFETCH_DISTANCE,
+                                     sizeof(double));
 
         memcpy(matrix->rows, rows, nnz*sizeof(uint32_t));
         memcpy(matrix->columns, columns, nnz*sizeof(uint32_t));
@@ -245,8 +249,8 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
                             1, SYMBOLIC_MULTIVEC, 0, SYMBOLIC_MULTIVEC,
                             ALWAYS_TUNE_AGGRESSIVELY);
         size_t n = ncolumns>nrows?ncolumns:nrows;
-        matrix->flat_input = calloc(n*2, sizeof(double));
-        matrix->flat_result = calloc(n*2, sizeof(double));
+        matrix->flat_input = huge_calloc(n*2, sizeof(double));
+        matrix->flat_result = huge_calloc(n*2, sizeof(double));
 #endif
 
         return matrix;
@@ -254,15 +258,15 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
 
 int sparse_matrix_free(sparse_matrix_t matrix)
 {
-        free(matrix->rows);
-        free(matrix->columns);
-        free(matrix->values);
+        huge_free(matrix->rows);
+        huge_free(matrix->columns);
+        huge_free(matrix->values);
         free_csr(&matrix->matrix);
         free_csr(&matrix->transpose);
 #ifdef USE_OSKI
         oski_DestroyMat(matrix->oski_matrix);
-        free(matrix->flat_input);
-        free(matrix->flat_result);
+        huge_free(matrix->flat_input);
+        huge_free(matrix->flat_result);
 #endif
         memset(matrix, 0, sizeof(struct sparse_matrix));
         free(matrix);

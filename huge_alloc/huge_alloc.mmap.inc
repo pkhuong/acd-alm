@@ -23,7 +23,7 @@ void * huge_calloc(size_t n, size_t size)
         return (char*)ret+padding;
 }
 
-void huge_free(void * ptr);
+void huge_free(void * ptr)
 {
         uintptr_t mask = (1ul<<21)-1;
         size_t * header = (size_t*)((uintptr_t)ptr & (~mask));

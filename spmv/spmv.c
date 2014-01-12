@@ -553,7 +553,7 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
                 info.out = OUT_y;
                 info.csr = transpose?&a->transpose:&a->matrix;
                 info.x = x;
-                thread_pool_for(pool, 0, info.csr->nrows, 64,
+                thread_pool_for(pool, 0, info.csr->nrows, 256,
                                 mult_csr_subrange, &info);
         } else {
                 mult_csr(OUT_y, transpose?&a->transpose:&a->matrix, x);
@@ -596,7 +596,7 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                 info.out = OUT_y;
                 info.csr = transpose?&a->transpose:&a->matrix;
                 info.x = x;
-                thread_pool_for(pool, 0, info.csr->nrows, 64,
+                thread_pool_for(pool, 0, info.csr->nrows, 256,
                                 mult_csr2_subrange, &info);
         } else {
                 mult_csr2(OUT_y, transpose?&a->transpose:&a->matrix, x);

@@ -94,6 +94,7 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
         if (0 == nactive) {
                 pool->job = NULL;
                 __sync_fetch_and_add(&pool->job_sequence, 1);
+                return;
         }
 
         while (pool->job_sequence == sequence)

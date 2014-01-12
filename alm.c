@@ -250,7 +250,7 @@ static int iter(struct alm_state * state, alm_t alm,
         approx_update_step_sizes(alm->approx);
         int reason = approx_solve(x, alm->nvars, alm->approx, -1u,
                                   state->precision, -HUGE_VAL, 1e-11,
-                                  log, 10000, diag, offset);
+                                  log, 10000, diag, offset, NULL);
         violation(state->violation, alm, x);
         double max_viol = norm_inf(state->violation, alm->nrhs, NULL);
         if (log != NULL)

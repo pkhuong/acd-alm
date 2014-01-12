@@ -2,6 +2,7 @@
 #define ALM_H
 #include "spmv/spmv.h"
 #include "approx/approx.h"
+#include "thread_pool/thread_pool.h"
 #include <stddef.h>
 #include <stdio.h>
 
@@ -28,7 +29,8 @@ int alm_free(alm_t);
 int alm_solve(alm_t, size_t niter,
               double * x, size_t nvars,
               double * lambda, size_t nconstraints,
-              FILE * log, double * OUT_diagnosis);
+              FILE * log, double * OUT_diagnosis,
+              thread_pool_t pool);
 
 alm_t alm_read(FILE * stream);
 #endif

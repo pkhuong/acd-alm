@@ -242,15 +242,16 @@ static void update_precision(struct alm_state * state, alm_t alm,
 }
 
 static int iter(struct alm_state * state, alm_t alm,
-                 double * x, double * lambda, FILE * log, size_t k,
-                 double * OUT_pg, double * OUT_max_viol)
+                double * x, double * lambda, FILE * log, size_t k,
+                double * OUT_pg, double * OUT_max_viol,
+                thread_pool_t pool)
 {
         double offset = penalise_linear(alm, lambda);
         double diag[5];
         approx_update_step_sizes(alm->approx);
         int reason = approx_solve(x, alm->nvars, alm->approx, -1u,
                                   state->precision, -HUGE_VAL, 1e-11,
-                                  log, 10000, diag, offset, NULL);
+                                  log, 10000, diag, offset, pool);
         violation(state->violation, alm, x);
         double max_viol = norm_inf(state->violation, alm->nrhs, NULL);
         if (log != NULL)
@@ -282,7 +283,8 @@ static int iter(struct alm_state * state, alm_t alm,
 
 int alm_solve(alm_t alm, size_t niter, double * x, size_t nvars,
               double * lambda, size_t nconstraints,
-              FILE * log, double * OUT_diagnosis)
+              FILE * log, double * OUT_diagnosis, 
+              thread_pool_t pool)
 {
         struct alm_state state;
         assert(nvars == alm->nvars);
@@ -295,7 +297,7 @@ int alm_solve(alm_t alm, size_t niter, double * x, size_t nvars,
         int ret = 1;
         for (size_t i = 0; i < niter; i++) {
                 int status = iter(&state, alm, x, lambda, log, i+1,
-                                  &pg, &max_viol);
+                                  &pg, &max_viol, pool);
                 if ((max_viol < 1e-5)
                     && ((status != 2) /* 2: pg is small enough */
                         || (pg < 1e-6))) {
@@ -360,16 +362,21 @@ alm_t alm_read(FILE * stream)
 int main (int argc, char ** argv)
 {
         sparse_matrix_init();
+        unsigned nthreads = 1;
         assert(argc > 1);
         FILE * instance = fopen(argv[1], "r");
         alm_t alm = alm_read(instance);
         fclose(instance);
+        if (argc > 2)
+                nthreads = atoi(argv[2]);
 
+        thread_pool_t pool = thread_pool_init(nthreads);
         double * x = calloc(alm_nvars(alm), sizeof(double)),
                 * y = calloc(alm_nrhs(alm), sizeof(double));
         alm_solve(alm, 1000, x, alm_nvars(alm),
                   y, alm_nrhs(alm),
-                  stdout, NULL);
+                  stdout, NULL, pool);
+        thread_pool_free(pool);
         free(y);
         free(x);
         sparse_matrix_free(alm_matrix(alm));

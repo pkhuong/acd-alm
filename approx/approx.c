@@ -267,7 +267,8 @@ static void compute_violation(struct vector * xv, approx_t approx)
         assert(nrows == approx->nrhs);
 
         assert(0 == sparse_matrix_multiply(xv->violation, nrows,
-                                           approx->matrix, xv->x, nvars, 0));
+                                           approx->matrix, xv->x, nvars, 0,
+                                           NULL));
         const v2d * rhs = (v2d*)approx->rhs;
         v2d * viol = (v2d*)xv->violation;
         size_t n = (nrows+1)/2;
@@ -354,7 +355,7 @@ static void gradient(struct vector * OUT_grad,
         assert(0 == sparse_matrix_multiply(OUT_grad->x, nvars,
                                            approx->matrix,
                                            scaled, nrows,
-                                           1));
+                                           1, NULL));
 
         {
                 v2d * grad = (v2d*)OUT_grad->x;
@@ -420,7 +421,7 @@ static void gradient2(struct vector ** OUT_grad,
                 assert(0 == sparse_matrix_multiply_2(grad, nvars,
                                                      approx->matrix,
                                                      scaled, nrows,
-                                                     1));
+                                                     1, NULL));
         }
 
         for (size_t i = 0; i < 2; i++) {
@@ -907,7 +908,8 @@ void test_1(size_t nrows, size_t ncolumns)
         double * x = calloc(ncolumns, sizeof(double));
 
         assert(0 == sparse_matrix_multiply(rhs, nrows,
-                                           m, solution, ncolumns, 0));
+                                           m, solution, ncolumns, 0,
+                                           NULL));
 
         approx_t a = approx_make(m, nrows, rhs, NULL, ncolumns,
                                  NULL, NULL, NULL);
@@ -920,7 +922,8 @@ void test_1(size_t nrows, size_t ncolumns)
 
         double * residual = calloc(nrows, sizeof(double));
         assert(0 == sparse_matrix_multiply(residual, nrows,
-                                           m, x, ncolumns, 0));
+                                           m, x, ncolumns, 0,
+                                           NULL));
         double d = diff(rhs, residual, nrows);
         printf("r: %.18f %.18f %p\n", diagnosis[0], d, x);
 

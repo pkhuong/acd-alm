@@ -481,8 +481,9 @@ static void mult_oski2(double ** out, size_t nout, double * flat_out,
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t a,
                            const double * x, size_t nx,
-                           int transpose)
+                           int transpose, thread_pool_t pool)
 {
+        (void)pool;
         size_t nrows = a->nrows,
                 ncolumns = a->ncolumns;
         uint32_t * rows = a->rows,
@@ -508,10 +509,11 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
 }
 
 int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
-                            const sparse_matrix_t a,
-                            const double ** x, size_t nx,
-                            int transpose)
+                             const sparse_matrix_t a,
+                             const double ** x, size_t nx,
+                             int transpose, thread_pool_t pool)
 {
+        (void)pool;
         size_t nrows = a->nrows,
                 ncolumns = a->ncolumns;
         uint32_t * rows = a->rows,
@@ -660,12 +662,14 @@ void random_test(size_t ncolumns, size_t nrows, size_t repeat)
 
         for (size_t i = 0; i < repeat; i++) {
                 random_vector(x, ncolumns);
-                sparse_matrix_multiply(y1, nrows, m, x, ncolumns, 0);
+                sparse_matrix_multiply(y1, nrows, m, x, ncolumns, 0,
+                                       NULL);
                 dense_mult(y2, dense, nrows, ncolumns, x);
                 assert(diff(y1, y2, nrows) < 1e-4);
 
                 random_vector(xt, nrows);
-                sparse_matrix_multiply(y1t, ncolumns, m, xt, nrows, 1);
+                sparse_matrix_multiply(y1t, ncolumns, m, xt, nrows, 1,
+                                       NULL);
                 dense_mult_t(y2t, dense, nrows, ncolumns, xt);
                 assert(diff(y1t, y2t, ncolumns) < 1e-4);
         }

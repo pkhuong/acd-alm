@@ -108,7 +108,7 @@ static double penalise_linear(alm_t alm, const double * lambda)
         assert(0 == sparse_matrix_multiply(c, nvars,
                                            alm->matrix,
                                            lambda, alm->nrhs,
-                                           1));
+                                           1, NULL));
         double * linear = alm->linear;
         for (size_t i = 0; i < nvars; i++)
                 c[i] = linear[i]-c[i];
@@ -122,7 +122,7 @@ static void violation(double * OUT_viol, alm_t alm, const double * x)
         assert(0 == sparse_matrix_multiply(OUT_viol, nrhs,
                                            alm->matrix,
                                            x, alm->nvars,
-                                           0));
+                                           0, NULL));
 
         const double * rhs = approx_rhs(alm->approx);
         for (size_t i = 0; i < nrhs; i++)

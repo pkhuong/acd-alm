@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <assert.h>
 
 void * huge_calloc(size_t n, size_t size)
 {

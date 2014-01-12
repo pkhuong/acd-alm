@@ -6,6 +6,8 @@
 
 typedef struct sparse_matrix * sparse_matrix_t;
 
+void sparse_matrix_init();
+
 sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
                                    size_t nnz,
                                    const uint32_t * rows,

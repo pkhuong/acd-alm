@@ -359,6 +359,7 @@ alm_t alm_read(FILE * stream)
 #ifdef TEST_ALM
 int main (int argc, char ** argv)
 {
+        sparse_matrix_init();
         assert(argc > 1);
         FILE * instance = fopen(argv[1], "r");
         alm_t alm = alm_read(instance);

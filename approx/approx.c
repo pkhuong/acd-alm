@@ -986,6 +986,7 @@ void test_1(size_t nrows, size_t ncolumns)
 
 int main ()
 {
+        sparse_matrix_init();
         for (size_t i = 10; i <= 20; i++) {
                 for (size_t j = 10; j <= 20; j++) {
                         printf("%zu %zu\n", i, j);

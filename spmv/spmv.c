@@ -7,6 +7,17 @@
 #include <math.h>
 #include <xmmintrin.h>
 
+#ifdef USE_OSKI
+# include <oski/oski.h>
+#endif
+
+void sparse_matrix_init()
+{
+#ifdef USE_OSKI
+        oski_Init();
+#endif
+}
+
 #define SWAP(X, Y) do {                         \
                 __typeof__(X) temp = (X);       \
                 (X) = (Y);                      \
@@ -49,6 +60,11 @@ struct sparse_matrix
         double * values;
         struct csr matrix;
         struct csr transpose;
+#ifdef USE_OSKI
+        oski_matrix_t oski_matrix;
+        double * flat_input;
+        double * flat_result;
+#endif
 };
 
 #define DEF(TYPE, FIELD)                        \
@@ -214,6 +230,25 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
         sparse_matrix_csr(matrix, &matrix->transpose, 1);
         sparse_matrix_swizzle(matrix);
 
+#ifdef USE_OSKI
+        matrix->oski_matrix
+                = oski_CreateMatCSR((int32_t*)matrix->matrix.rows_indices,
+                                    (int32_t*)matrix->matrix.columns,
+                                    matrix->matrix.values,
+                                    nrows, ncolumns,
+                                    SHARE_INPUTMAT,
+                                    1, INDEX_ZERO_BASED);
+        oski_SetHintMatMult(matrix->oski_matrix, OP_NORMAL,
+                            1, SYMBOLIC_VEC, 0, SYMBOLIC_VEC,
+                            ALWAYS_TUNE_AGGRESSIVELY);
+        oski_SetHintMatMult(matrix->oski_matrix, OP_TRANS,
+                            1, SYMBOLIC_MULTIVEC, 0, SYMBOLIC_MULTIVEC,
+                            ALWAYS_TUNE_AGGRESSIVELY);
+        size_t n = ncolumns>nrows?ncolumns:nrows;
+        matrix->flat_input = calloc(n*2, sizeof(double));
+        matrix->flat_result = calloc(n*2, sizeof(double));
+#endif
+
         return matrix;
 }
 
@@ -224,6 +259,11 @@ int sparse_matrix_free(sparse_matrix_t matrix)
         free(matrix->values);
         free_csr(&matrix->matrix);
         free_csr(&matrix->transpose);
+#ifdef USE_OSKI
+        oski_DestroyMat(matrix->oski_matrix);
+        free(matrix->flat_input);
+        free(matrix->flat_result);
+#endif
         memset(matrix, 0, sizeof(struct sparse_matrix));
         free(matrix);
 
@@ -392,6 +432,48 @@ static void mult_csr2(double ** out, struct csr * csr, const double ** x)
         }
 }
 
+#ifdef USE_OSKI
+static void mult_oski(double * out, size_t nout,
+                      oski_matrix_t matrix,
+                      const double * x, size_t nx,
+                      int transpose)
+{
+        oski_vecview_t x_view = oski_CreateVecView((double*)x, nx,
+                                                   STRIDE_UNIT);
+        oski_vecview_t y_view = oski_CreateVecView(out, nout,
+                                                   STRIDE_UNIT);
+
+        oski_MatMult(matrix, transpose?OP_TRANS:OP_NORMAL,
+                     1, x_view, 0, y_view);
+        oski_DestroyVecView(x_view);
+        oski_DestroyVecView(y_view);
+}
+
+static void mult_oski2(double ** out, size_t nout, double * flat_out,
+                       oski_matrix_t matrix,
+                       const double ** x, size_t nx, double * flat_in,
+                       int transpose)
+{
+        memcpy(flat_in, x[0], sizeof(double)*nx);
+        memcpy(flat_in+nx, x[1], sizeof(double)*nx);
+
+        oski_vecview_t x_view 
+                = oski_CreateMultiVecView(flat_in, nx, 2,
+                                          LAYOUT_COLMAJ, nx);
+        oski_vecview_t y_view
+                = oski_CreateMultiVecView(flat_out, nout, 2,
+                                          LAYOUT_COLMAJ, nout);
+
+        oski_MatMult(matrix, transpose?OP_TRANS:OP_NORMAL,
+                     1, x_view, 0, y_view);
+        oski_DestroyVecView(x_view);
+        oski_DestroyVecView(y_view);
+
+        memcpy(out[0], flat_out, sizeof(double)*nout);
+        memcpy(out[1], flat_out+nout, sizeof(double)*nout);
+}
+#endif
+
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t a,
                            const double * x, size_t nx,
@@ -408,12 +490,14 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
 
         assert(ny == nrows);
         assert(nx == ncolumns);
-#ifdef SWIZZLED_MULT
         (void)mult_csr;
+        (void)mult;
+#ifdef SWIZZLED_MULT
         memset(OUT_y, 0, sizeof(double)*ny);
         mult(OUT_y, a->nnz, columns, rows, a->values, x);
+#elif defined(USE_OSKI)
+        mult_oski(OUT_y, ny, a->oski_matrix, x, nx, transpose);
 #else
-        (void)mult;
         mult_csr(OUT_y, transpose?&a->transpose:&a->matrix, x);
 #endif
         return 0;
@@ -435,13 +519,18 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
 
         assert(ny == nrows);
         assert(nx == ncolumns);
-#ifdef SWIZZLED_MULT
         (void)mult_csr2;
+        (void)mult2;
+#ifdef SWIZZLED_MULT
         memset(OUT_y[0], 0, sizeof(double)*ny);
         memset(OUT_y[1], 0, sizeof(double)*ny);
         mult2(OUT_y, a->nnz, columns, rows, a->values, x);
+#elif defined(USE_OSKI)
+        mult_oski2(OUT_y, ny, a->flat_result,
+                   a->oski_matrix,
+                   x, nx, a->flat_input,
+                   transpose);
 #else
-        (void)mult2;
         mult_csr2(OUT_y, transpose?&a->transpose:&a->matrix, x);
 #endif
         return 0;
@@ -588,6 +677,7 @@ void random_test(size_t ncolumns, size_t nrows, size_t repeat)
 
 int main()
 {
+        sparse_matrix_init();
         for (size_t i = 0; i < 20; i++) {
                 for (size_t j = 0; j < 20; j++) {
                         random_test(i, j, 10);

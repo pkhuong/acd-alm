@@ -729,10 +729,19 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                              &state->g2, &state->z,
                              approx->lower, approx->upper,
                              approx->inv_v);
-                        if (i == 0)
+                        if (i == 0) {
                                 state->step_length *= 1.01;
+                                if (state->step_length > 1)
+                                        state->step_length = 1+1e-6;
+                        }
                         break;
                 } else {
+                        /* Special code to tell when the step is
+                         * definitely OK. If so, perform a normal
+                         * step, but update step_length.
+                         */
+                        int safe = (step_length <= 1+1e-6);
+                        if (safe) step_length = 1;
                         double expected_improvement
                                 = long_step(&state->zp,
                                             state->theta, step_length,
@@ -743,6 +752,8 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                         double now = value(approx, &state->zp);
                         if (now > initial+expected_improvement) {
                                 state->step_length = .9*step_length;
+                                /* Bad guess, but safe step anyway */
+                                if (safe) break;
                         } else {
                                 state->step_length = step_length*1.01;
                                 break;

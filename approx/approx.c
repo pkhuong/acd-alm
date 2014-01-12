@@ -719,6 +719,7 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                 state->value = value(approx, &state->z);
         }
 
+        int descent_achieved = 0;
         for (int i = 0; i < 2; i++) {
                 double step_length = state->step_length;
 #ifdef STATIC_STEP
@@ -750,12 +751,14 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
                                             approx->inv_v, approx->v);
                         double initial = value(approx, &state->z);
                         double now = value(approx, &state->zp);
+                        assert(expected_improvement <= 0);
                         if (now > initial+expected_improvement) {
                                 state->step_length = .9*step_length;
                                 /* Bad guess, but safe step anyway */
                                 if (safe) break;
                         } else {
                                 state->step_length = step_length*1.01;
+                                descent_achieved = 1;
                                 break;
                         }
                 }
@@ -764,7 +767,8 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg)
         *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                         approx->lower, approx->upper);
 
-        if (dot_diff(&state->g, &state->z, &state->zp) > 0) {
+        if ((!descent_achieved) /* Value improvement OK */
+            && (dot_diff(&state->g, &state->z, &state->zp) > 0)) {
                 /* Oscillation */
                 copy_vector(&state->x, &state->z);
                 state->theta = 1;

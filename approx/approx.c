@@ -292,7 +292,8 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg,
                                             state->theta, step_length,
                                             &state->g2, &state->z,
                                             approx->lower, approx->upper,
-                                            approx->inv_v, approx->v);
+                                            approx->inv_v, approx->v,
+                                            pool);
                         double initial = value(approx, &state->z,
                                                pool);
                         double now = value(approx, &state->zp,

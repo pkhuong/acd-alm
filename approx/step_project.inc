@@ -56,32 +56,26 @@ static void step(struct vector * zpv, double theta,
         zpv->value = nan("");
 }
 
-/*
- * f(x) ~= f(z) + g'x + \sum_i (theta v_i)/2 (x-z)^2_i
- *   min in z_i - 1/(theta v_i) g_i
- */
-static double
-long_step(struct vector * zpv, double theta, double length,
-          const struct vector * gv, const struct vector * zv,
-          const double * restrict lower, const double * restrict upper,
-          const double * restrict inv_v, const double * restrict vs)
+struct long_step_state
 {
-        size_t n = zpv->n;
-        assert(gv->n == n);
-        assert(zv->n == n);
+        v2d itheta, theta2;
+        v2d * zp;
+        const v2d * g, * z, * l, * u, * iv, * v;
+};
 
-        size_t vector_n = (n+1)/2;
-        v2d * zp = (v2d*)zpv->x;
-        const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
-                * l = (const v2d*)lower, * u = (const v2d*)upper,
-                * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
-        assert(length >= 1);
-        double inv_theta = (length-1e-6)/theta;
-        v2d itheta = {inv_theta, inv_theta};
-        v2d theta2 = {theta/length, theta/length};
+static double
+long_step_1(size_t from, size_t end, void * thunk, unsigned id)
+{
+        (void)id;
+        struct long_step_state * state = thunk;
+        v2d itheta = state->itheta, theta2 = state->theta2;
+        v2d * zp = state->zp;
+        const v2d * g = state->g, * z = state->z,
+                * l = state->l, * u = state->u,
+                * iv = state->iv, * v = state->v;
         v2d linear_estimate = {0, 0};
         v2d quad_estimate = {0, 0};
-        for (size_t i = 0; i < vector_n; i++) {
+        for (size_t i = from; i < end; i++) {
                 v2d gi = g[i], zi = z[i],
                         li = l[i], ui = u[i],
                         inv_vi = iv[i],
@@ -95,8 +89,45 @@ long_step(struct vector * zpv, double theta, double length,
                 linear_estimate += gi*delta;
                 quad_estimate += delta*delta*theta2*vi;
         }
+        return ((linear_estimate[0]+linear_estimate[1])
+                +.5*(quad_estimate[0]+quad_estimate[1]));        
+}
+/*
+ * f(x) ~= f(z) + g'x + \sum_i (theta v_i)/2 (x-z)^2_i
+ *   min in z_i - 1/(theta v_i) g_i
+ */
+static double
+long_step(struct vector * zpv, double theta, double length,
+          const struct vector * gv, const struct vector * zv,
+          const double * restrict lower, const double * restrict upper,
+          const double * restrict inv_v, const double * restrict vs,
+          thread_pool_t pool)
+{
+        size_t n = zpv->n;
+        assert(gv->n == n);
+        assert(zv->n == n);
+
+        size_t vector_n = (n+1)/2;
+        v2d * zp = (v2d*)zpv->x;
+        const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
+                * l = (const v2d*)lower, * u = (const v2d*)upper,
+                * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
+        assert(length >= 1);
+        double inv_theta = (length-1e-6)/theta;
+        struct long_step_state state 
+                = { .itheta = {inv_theta, inv_theta},
+                    .theta2 = {theta/length, theta/length},
+                    .zp = zp,
+                    .g = g, .z = z,
+                    .l = l, .u = u,
+                    .iv = iv, .v = v};
+        double estimate
+                = thread_pool_map_reduce(pool,
+                                         0, vector_n, 64,
+                                         long_step_1, &state,
+                                         THREAD_POOL_REDUCE_SUM,
+                                         0);
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
-        return ((linear_estimate[0]+linear_estimate[1])
-                +.5*(quad_estimate[0]+quad_estimate[1]));
+        return estimate;
 }

@@ -28,7 +28,7 @@ struct thread_pool
         pthread_mutex_t lock;
         pthread_cond_t queue;
         int sleeping;
-        size_t allocated_bytes;
+        size_t allocated_bytes_per_worker;
         void * storage;
         void ** storage_vector;
 };
@@ -92,8 +92,7 @@ void thread_pool_free(thread_pool_t pool)
         free(pool->threads);
         pthread_mutex_destroy(&pool->lock);
         pthread_cond_destroy(&pool->queue);
-        if (pool->storage != NULL)
-                huge_free(pool->storage);
+        huge_free(pool->storage);
         free(pool->storage_vector);
         memset(pool, 0, sizeof(struct thread_pool));
         free(pool);
@@ -102,6 +101,42 @@ void thread_pool_free(thread_pool_t pool)
 size_t thread_pool_count(thread_pool_t pool)
 {
         return 1+pool->nthreads;
+}
+
+static size_t ensure_worker_storage(thread_pool_t pool,
+                                    size_t char_per_worker)
+{
+        size_t aligned_size = (char_per_worker+63)&(~63);
+        size_t nworkers = thread_pool_count(pool);
+        if (aligned_size > pool->allocated_bytes_per_worker) {
+                huge_free(pool->storage);
+                pool->storage = huge_calloc(nworkers, aligned_size);
+        } else {
+                memset(pool->storage, 0, aligned_size*nworkers);
+        }
+
+        for (size_t i = 0, offset = 0;
+             i < nworkers;
+             i++, offset += aligned_size)
+                pool->storage_vector[i] = pool->storage+offset;
+        return aligned_size*nworkers;
+}
+
+void * const * thread_pool_worker_storage(thread_pool_t pool,
+                                          size_t char_per_worker)
+{
+        ensure_worker_storage(pool, char_per_worker);
+        return pool->storage_vector;
+}
+
+void * thread_pool_worker_storage_flat(thread_pool_t pool,
+                                       size_t char_per_worker,
+                                       size_t *OUT_total_size)
+{
+        size_t size = ensure_worker_storage(pool, char_per_worker);
+        if (OUT_total_size != NULL)
+                *OUT_total_size = size;
+        return pool->storage;
 }
 
 void thread_pool_sleep(thread_pool_t pool)

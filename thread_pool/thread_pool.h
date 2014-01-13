@@ -8,8 +8,11 @@ thread_pool_t thread_pool_init(unsigned nthreads);
 void thread_pool_free(thread_pool_t);
 
 size_t thread_pool_count(thread_pool_t);
-void * const * thread_pool_worker_storage(size_t char_per_worker);
-void * thread_pool_worker_storage_flat(size_t char_per_worker);
+void * const * thread_pool_worker_storage(thread_pool_t,
+                                          size_t char_per_worker);
+void * thread_pool_worker_storage_flat(thread_pool_t,
+                                       size_t char_per_worker,
+                                       size_t * OUT_total_size);
 
 void thread_pool_sleep(thread_pool_t);
 void thread_pool_wakeup(thread_pool_t);

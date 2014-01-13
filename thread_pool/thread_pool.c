@@ -62,7 +62,7 @@ static void set_job(thread_pool_t pool, struct job * job)
 {
         assert(pool->job == NULL);
         assert(job != NULL);
-        if (job != (struct job*)-1ul)
+        if ((job != (struct job*)-1ul) && (job != (struct job*)-2ul))
                 assert(job->barrier_waiting_for
                        == (pool->nthreads+1));
 
@@ -88,6 +88,16 @@ void thread_pool_free(thread_pool_t pool)
         pthread_cond_destroy(&pool->queue);
         memset(pool, 0, sizeof(struct thread_pool));
         free(pool);
+}
+
+void thread_pool_sleep(thread_pool_t pool)
+{
+        if (pool->sleeping) return;
+        pthread_mutex_lock(&pool->lock);
+        set_job(pool, (struct job*)-2ul);
+        /* otherwise set_job will wake them back up! */
+        pool->sleeping = 1;
+        pthread_mutex_unlock(&pool->lock);
 }
 
 void thread_pool_wakeup(thread_pool_t pool)
@@ -147,6 +157,14 @@ static void do_job(struct job * job, unsigned self)
         }
 }
 
+static void worker_sleep(thread_pool_t pool)
+{
+        pthread_mutex_lock(&pool->lock);
+        while (pool->sleeping)
+                pthread_cond_wait(&pool->queue, &pool->lock);
+        pthread_mutex_unlock(&pool->lock);
+}
+
 static void * worker(void * thunk)
 {
         thread_pool_t pool = thunk;
@@ -157,8 +175,12 @@ static void * worker(void * thunk)
                 struct job * job = get_job(pool);
                 if (job == (struct job*)-1UL)
                         break;
-                do_job(job, worker_id);
-                release_job(pool, job, 0);
+                if (job == (struct job*)-2ul) {
+                        worker_sleep(pool);
+                } else {
+                        do_job(job, worker_id);
+                        release_job(pool, job, 0);
+                }
         }
 
         return NULL;

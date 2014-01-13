@@ -325,6 +325,9 @@ double thread_pool_map_reduce(thread_pool_t pool,
                               enum thread_pool_reducer reducer,
                               double initial_value)
 {
+        if (pool == NULL)
+                return function(from, end, info, 0);
+
         assert(reducer >= THREAD_POOL_REDUCE_SUM);
         assert(reducer <= THREAD_POOL_REDUCE_MIN);
         size_t n = thread_pool_count(pool);

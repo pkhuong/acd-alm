@@ -75,12 +75,10 @@ long_step(struct vector * zpv, double theta, double length,
         const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
                 * l = (const v2d*)lower, * u = (const v2d*)upper,
                 * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
-        v2d max_z = {0,0};
         assert(length >= 1);
         double inv_theta = (length-1e-6)/theta;
         v2d itheta = {inv_theta, inv_theta};
         v2d theta2 = {theta/length, theta/length};
-        v2ul mask = {~(1ull<<63), ~(1ull<<63)};
         v2d linear_estimate = {0, 0};
         v2d quad_estimate = {0, 0};
         for (size_t i = 0; i < vector_n; i++) {
@@ -93,16 +91,12 @@ long_step(struct vector * zpv, double theta, double length,
                 trial = __builtin_ia32_maxpd(li, trial);
                 trial = __builtin_ia32_minpd(ui, trial);
                 zp[i] = trial;
-                max_z = __builtin_ia32_maxpd(max_z,
-                                             (v2d)((v2ul)trial&mask));
                 v2d delta = trial - zi;
                 linear_estimate += gi*delta;
                 quad_estimate += delta*delta*theta2*vi;
         }
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
-        if (isfinite(max(max_z[0], max_z[1])))
-                return ((linear_estimate[0]+linear_estimate[1])
-                        +.5*(quad_estimate[0]+quad_estimate[1]));
-        return -HUGE_VAL; /* Might be a finite precision problem. fail */
+        return ((linear_estimate[0]+linear_estimate[1])
+                +.5*(quad_estimate[0]+quad_estimate[1]));
 }

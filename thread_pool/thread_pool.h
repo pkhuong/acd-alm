@@ -32,5 +32,6 @@ enum thread_pool_reducer{REDUCE_SUM, REDUCE_MAX, REDUCE_MIN};
 void thread_pool_map_reduce(thread_pool_t,
                             size_t from, size_t end, size_t granularity,
                             thread_pool_map function, void * info,
-                            enum thread_pool_reducer reducer);
+                            enum thread_pool_reducer reducer,
+                            double initial_value);
 #endif

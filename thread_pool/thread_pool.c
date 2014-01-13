@@ -158,11 +158,10 @@ static void execute_job(thread_pool_t pool, struct job * job)
 
 static size_t ideal_granularity(size_t n, size_t minimum, unsigned nthreads)
 {
-        size_t scale = nthreads*nthreads;
-        size_t m = (n+scale-1)/scale;
-        size_t grains = ((m+minimum-1)/minimum);
-        if (grains == 0) grains = 1;
-        return minimum*grains;
+        n = (n+minimum-1)/minimum;
+        size_t nchunks = nthreads*10;
+        if (n < nchunks) return minimum;
+        return minimum*(n/nchunks);
 }
 
 void thread_pool_for(thread_pool_t pool,

@@ -173,6 +173,7 @@ static struct job * get_job(thread_pool_t pool)
 
 static void release_job(thread_pool_t pool, struct job * job, int master)
 {
+        (void)master;
         assert(job->barrier_waiting_for > 0);
         assert(pool->job == job);
         unsigned sequence = pool->job_sequence;
@@ -184,13 +185,8 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
                 return;
         }
 
-        if (master) {
-                while (job->barrier_waiting_for)
-                        __asm__("":::"memory");
-        } else {
-                while (pool->job_sequence == sequence)
-                        __asm__("":::"memory");
-        }
+        while (pool->job_sequence == sequence)
+                __asm__("":::"memory");
 }
 
 static void do_job(struct job * job, unsigned self)

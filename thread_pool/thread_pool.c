@@ -56,7 +56,6 @@ static void set_job(thread_pool_t pool, struct job * job)
 
         __sync_fetch_and_add(&pool->job_sequence, 1);
         pool->job = job;
-        __sync_synchronize();
 }
 
 void thread_pool_free(thread_pool_t pool)

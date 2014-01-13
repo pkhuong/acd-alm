@@ -226,6 +226,8 @@ int main (int argc, char **argv)
                 nthread = atoi(argv[1]);
         thread_pool_t pool = thread_pool_init(nthread);
         unsigned n = 1024*1024;
+        if (argc > 2)
+                n = atoi(argv[2]);
         thread_pool_for(pool, 0, 1000, 1, sleep_test, &n);
         thread_pool_free(pool);
         return 0;

@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <strings.h>
+#include "../huge_alloc/huge_alloc.h"
 
 struct job
 {
@@ -27,6 +28,9 @@ struct thread_pool
         pthread_mutex_t lock;
         pthread_cond_t queue;
         int sleeping;
+        size_t allocated_bytes;
+        void * storage;
+        void ** storage_vector;
 };
 
 static inline void maybe_wake_up(thread_pool_t pool)
@@ -54,6 +58,9 @@ thread_pool_t thread_pool_init(unsigned nthreads)
                                          worker, pool);
                 assert(0 == ret);
         }
+
+        pool->storage = NULL;
+        pool->storage_vector = calloc(nthreads, sizeof(void*));
 
         return pool;
 }
@@ -85,6 +92,9 @@ void thread_pool_free(thread_pool_t pool)
         free(pool->threads);
         pthread_mutex_destroy(&pool->lock);
         pthread_cond_destroy(&pool->queue);
+        if (pool->storage != NULL)
+                huge_free(pool->storage);
+        free(pool->storage_vector);
         memset(pool, 0, sizeof(struct thread_pool));
         free(pool);
 }

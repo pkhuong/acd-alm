@@ -372,7 +372,7 @@ int main (int argc, char ** argv)
 
         thread_pool_t pool = NULL;
         if (nthreads >= 0)
-                thread_pool_init(nthreads);
+                pool = thread_pool_init(nthreads);
         double * x = calloc(alm_nvars(alm), sizeof(double)),
                 * y = calloc(alm_nrhs(alm), sizeof(double));
         alm_solve(alm, 1000, x, alm_nvars(alm),

@@ -8,7 +8,7 @@ void * huge_calloc(size_t n, size_t size)
 #if _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
         void * ptr = 0;
         size_t nbytes = n*size+16;
-        assert(0 == posix_memalign(&ptr, 16, nbytes));
+        assert(0 == posix_memalign(&ptr, 64, nbytes));
         memset(ptr, 0, nbytes);
         return ptr;
 #else

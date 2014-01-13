@@ -99,6 +99,11 @@ void thread_pool_free(thread_pool_t pool)
         free(pool);
 }
 
+size_t thread_pool_count(thread_pool_t pool)
+{
+        return 1+pool->nthreads;
+}
+
 void thread_pool_sleep(thread_pool_t pool)
 {
         if (pool->sleeping) return;

@@ -7,7 +7,7 @@ typedef struct thread_pool * thread_pool_t;
 thread_pool_t thread_pool_init(unsigned nthreads);
 void thread_pool_free(thread_pool_t);
 
-size_t thread_pool_count();
+size_t thread_pool_count(thread_pool_t);
 void * const * thread_pool_worker_storage(size_t char_per_worker);
 void * thread_pool_worker_storage_flat(size_t char_per_worker);
 

@@ -112,6 +112,7 @@ static size_t ensure_worker_storage(thread_pool_t pool,
         if (aligned_size > pool->allocated_bytes_per_worker) {
                 huge_free(pool->storage);
                 pool->storage = huge_calloc(nworkers, aligned_size);
+                pool->allocated_bytes_per_worker = aligned_size;
         } else {
                 memset(pool->storage, 0, aligned_size*nworkers);
         }

@@ -60,9 +60,28 @@ static void destroy_vector(struct vector * x)
 typedef double v2d __attribute__ ((vector_size (16)));
 typedef uint64_t v2ul __attribute__ ((vector_size (16)));
 
+struct linterp_state
+{
+        v2d scale2, theta2;
+        v2d * OUT_y;
+        const v2d * x, * z;
+};
+
+static void linterp_1(size_t from, size_t to, void * data, unsigned id)
+{
+        (void)id;
+        struct linterp_state * state = data;
+        v2d scale2 = state->scale2, theta2 = state->theta2;
+        v2d * OUT_y = state->OUT_y;
+        const v2d * x = state->x, * z = state->z;
+        for (size_t i = from; i < to; i++)
+                OUT_y[i] = scale2*x[i]+theta2*z[i];
+}
+
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,
-                    const struct vector * xv, const struct vector * zv)
+                    const struct vector * xv, const struct vector * zv,
+                    thread_pool_t pool)
 {
         assert(theta >= 0);
         assert(theta <= 1);
@@ -76,10 +95,13 @@ static void linterp(struct vector * OUT_yv, double theta,
         {
                 v2d * OUT_y = (v2d*)OUT_yv->x;
                 const v2d * x = (v2d*)xv->x, * z = (v2d*)zv->x;
-
                 size_t n = (nvars+1)/2;
-                for (size_t i = 0; i < n; i++)
-                        OUT_y[i] = scale2*x[i]+theta2*z[i];
+                struct linterp_state state
+                        = {.scale2 = scale2,
+                           .theta2 = theta2,
+                           .OUT_y = OUT_y,
+                           .x = x, .z = z};
+                thread_pool_for(pool, 0, n, 64, linterp_1, &state);
         }
 
         size_t nviolation = OUT_yv->nviolation;
@@ -90,8 +112,13 @@ static void linterp(struct vector * OUT_yv, double theta,
                 const v2d * x = (v2d*)xv->violation,
                         * z = (v2d*)zv->violation;
                 size_t n = (nviolation+1)/2;
-                for (size_t i = 0; i < n; i++)
-                        OUT_y[i] = scale2*x[i]+theta2*z[i];
+
+                struct linterp_state state
+                        = {.scale2 = scale2,
+                           .theta2 = theta2,
+                           .OUT_y = OUT_y,
+                           .x = x, .z = z};
+                thread_pool_for(pool, 0, n, 64, linterp_1, &state);
                 OUT_yv->violationp = 1;
         } else {
                 OUT_yv->violationp = 0;

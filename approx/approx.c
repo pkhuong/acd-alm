@@ -538,7 +538,8 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg,
      thread_pool_t pool)
 {
         linterp(&state->y, state->theta,
-                &state->x, &state->z);
+                &state->x, &state->z,
+                pool);
         {
                 struct vector * g[2] = {&state->g, &state->g2};
                 struct vector * violation[2] = {&state->violation,
@@ -610,7 +611,8 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg,
         if (!state->zp.violationp)
                 compute_violation(&state->zp, approx, pool);
         linterp(&state->x, state->theta,
-                &state->x, &state->zp);
+                &state->x, &state->zp,
+                pool);
         state->theta = next_theta(state->theta);
         {
                 /* swap */

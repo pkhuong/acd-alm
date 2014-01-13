@@ -19,12 +19,21 @@ struct job
 
 struct thread_pool
 {
-        pthread_t * threads;
-        unsigned nthreads;
-        struct job * job;
         unsigned job_sequence;
         unsigned worker_id_counter;
+        struct job * job;
+        pthread_t * threads;
+        unsigned nthreads;
+        pthread_mutex_t lock;
+        pthread_cond_t queue;
+        int sleeping;
 };
+
+static inline void maybe_wake_up(thread_pool_t pool)
+{
+        if (pool->sleeping)
+                thread_pool_wakeup(pool);
+}
 
 static void * worker(void*);
 
@@ -37,6 +46,8 @@ thread_pool_t thread_pool_init(unsigned nthreads)
         thread_pool_t pool = calloc(1, sizeof(struct thread_pool));
         pool->threads = calloc(allocated_threads, sizeof(pthread_t));
         pool->nthreads = allocated_threads;
+        pthread_mutex_init(&pool->lock, NULL);
+        pthread_cond_init(&pool->queue, NULL);
 
         for (unsigned i = 0; i < allocated_threads; i++) {
                 int ret = pthread_create(pool->threads+i, NULL,
@@ -55,6 +66,7 @@ static void set_job(thread_pool_t pool, struct job * job)
                 assert(job->barrier_waiting_for
                        == (pool->nthreads+1));
 
+        maybe_wake_up(pool);
         __sync_fetch_and_add(&pool->job_sequence, 1);
         pool->job = job;
         __sync_synchronize();
@@ -72,8 +84,19 @@ void thread_pool_free(thread_pool_t pool)
                 assert(0 == ret);
         }
         free(pool->threads);
+        pthread_mutex_destroy(&pool->lock);
+        pthread_cond_destroy(&pool->queue);
         memset(pool, 0, sizeof(struct thread_pool));
         free(pool);
+}
+
+void thread_pool_wakeup(thread_pool_t pool)
+{
+        if (!pool->sleeping) return;
+        pthread_mutex_lock(&pool->lock);
+        pool->sleeping = 0;
+        pthread_cond_broadcast(&pool->queue);
+        pthread_mutex_unlock(&pool->lock);
 }
 
 static struct job * get_job(thread_pool_t pool)

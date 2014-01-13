@@ -205,3 +205,29 @@ void thread_pool_for(thread_pool_t pool,
                  function, info);
         execute_job(pool, &job);
 }
+
+#ifdef TEST_THREAD_POOL
+#include <stdlib.h>
+#include <stdio.h>
+
+void sleep_test(size_t from, size_t end, void * info, unsigned id)
+{
+        (void)id;
+        size_t n = *(size_t*)info;
+        for (size_t i = from; i < end; i++)
+                for (size_t j = 0; j < n; j++)
+                        __asm__("":::"memory");
+}
+
+int main (int argc, char **argv)
+{
+        unsigned nthread = 0;
+        if (argc > 1)
+                nthread = atoi(argv[1]);
+        thread_pool_t pool = thread_pool_init(nthread);
+        unsigned n = 1024*1024;
+        thread_pool_for(pool, 0, 1000, 1, sleep_test, &n);
+        thread_pool_free(pool);
+        return 0;
+}
+#endif

@@ -27,11 +27,13 @@ void thread_pool_for(thread_pool_t,
 typedef double (*thread_pool_map)(size_t begin, size_t end, void * info,
                                   unsigned worker_id);
 
-enum thread_pool_reducer{REDUCE_SUM, REDUCE_MAX, REDUCE_MIN};
+enum thread_pool_reducer{THREAD_POOL_REDUCE_SUM,
+                         THREAD_POOL_REDUCE_MAX,
+                         THREAD_POOL_REDUCE_MIN};
 
-void thread_pool_map_reduce(thread_pool_t,
-                            size_t from, size_t end, size_t granularity,
-                            thread_pool_map function, void * info,
-                            enum thread_pool_reducer reducer,
-                            double initial_value);
+double thread_pool_map_reduce(thread_pool_t,
+                              size_t from, size_t end, size_t granularity,
+                              thread_pool_map function, void * info,
+                              enum thread_pool_reducer reducer,
+                              double initial_value);
 #endif

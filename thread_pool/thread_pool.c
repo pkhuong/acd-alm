@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <strings.h>
+#include <math.h>
 #include "../huge_alloc/huge_alloc.h"
 
 struct job
@@ -286,6 +287,81 @@ void thread_pool_for(thread_pool_t pool,
                                    pool->nthreads+1),
                  function, info);
         execute_job(pool, &job);
+}
+
+struct map_reduce_info
+{
+        thread_pool_map function;
+        void * info;
+        enum thread_pool_reducer reducer;
+        double * const * storage;
+};
+
+static void map_reduce_worker(size_t begin, size_t end, void * thunk,
+                              unsigned id)
+{
+        struct map_reduce_info * info = thunk;
+        double value = info->function(begin, end, info->info, id);
+        double * accumulator = info->storage[id];
+        switch (info->reducer)
+        {
+        case THREAD_POOL_REDUCE_SUM:
+                *accumulator += value;
+                break;
+        case THREAD_POOL_REDUCE_MAX:
+                *accumulator = fmax(*accumulator, value);
+                break;
+        case THREAD_POOL_REDUCE_MIN:
+                *accumulator = fmin(*accumulator, value);
+                break;
+        default:
+                assert(0 && "Unknown reducer type");
+        }
+}
+
+double thread_pool_map_reduce(thread_pool_t pool,
+                              size_t from, size_t end, size_t granularity,
+                              thread_pool_map function, void * info,
+                              enum thread_pool_reducer reducer,
+                              double initial_value)
+{
+        assert(reducer >= THREAD_POOL_REDUCE_SUM);
+        assert(reducer <= THREAD_POOL_REDUCE_MIN);
+        size_t n = thread_pool_count(pool);
+        double * const * storage =
+                (double * const *)thread_pool_worker_storage(pool, 8);
+        if (initial_value != 0) {
+                for (size_t i = 0; i < n; i++)
+                        *storage[i] = initial_value;
+        }
+
+        struct map_reduce_info mr_info
+                = {.function = function,
+                   .info = info,
+                   .reducer = reducer,
+                   .storage = storage};
+        thread_pool_for(pool, from, end, granularity, 
+                        map_reduce_worker, &mr_info);
+
+        double accumulator = initial_value;
+        switch (reducer)
+        {
+        case THREAD_POOL_REDUCE_SUM:
+                for (size_t i = 0; i < n; i++)
+                        accumulator += *storage[i];
+                break;
+        case THREAD_POOL_REDUCE_MAX:
+                for (size_t i = 0; i < n; i++)
+                        accumulator = fmax(accumulator, *storage[i]);
+                break;
+        case THREAD_POOL_REDUCE_MIN:
+                for (size_t i = 0; i < n; i++)
+                        accumulator = fmin(accumulator, *storage[i]);
+                break;
+        default:
+                assert(0 && "Unknown reducer type");
+        }
+        return accumulator;
 }
 
 #ifdef TEST_THREAD_POOL

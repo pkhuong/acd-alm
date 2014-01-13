@@ -378,6 +378,17 @@ void sleep_test(size_t from, size_t end, void * info, unsigned id)
                         __asm__("":::"memory");
 }
 
+double map_reduce_test(size_t from, size_t end, void * info, unsigned id)
+{
+        (void)info;
+        (void)id;
+
+        double acc = 0;
+        for (size_t i = from; i < end; i++)
+                acc += i;
+        return acc;
+}
+
 int main (int argc, char **argv)
 {
         unsigned nthread = 0;
@@ -396,7 +407,10 @@ int main (int argc, char **argv)
         thread_pool_sleep(pool);
         printf("sleeping for 5 seconds\n");
         sleep(5);
-        thread_pool_for(pool, 0, 1000, 1, sleep_test, &n);
+        double sum = thread_pool_map_reduce(pool, 0, n, 1,
+                                            map_reduce_test, NULL,
+                                            THREAD_POOL_REDUCE_SUM, 0);
+        printf("sum: %f %zu\n", sum, (n*(n-1)/2));
         thread_pool_free(pool);
         return 0;
 }

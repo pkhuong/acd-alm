@@ -28,7 +28,7 @@ void * huge_calloc(size_t n, size_t size)
 void huge_free(void * ptr)
 {
         uintptr_t mask = (1ul<<12)-1;
-        if (ptr == 0) return;
+        if (ptr == NULL) return;
         size_t * header = (size_t*)((uintptr_t)ptr & (~mask));
         size_t bytes = header[0], padding = header[1];
         assert((char*)ptr == (char*)header+padding);

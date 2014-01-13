@@ -120,7 +120,7 @@ static size_t ensure_worker_storage(thread_pool_t pool,
              i < nworkers;
              i++, offset += aligned_size)
                 pool->storage_vector[i] = pool->storage+offset;
-        return aligned_size*nworkers;
+        return aligned_size;
 }
 
 void * const * thread_pool_worker_storage(thread_pool_t pool,
@@ -132,11 +132,11 @@ void * const * thread_pool_worker_storage(thread_pool_t pool,
 
 void * thread_pool_worker_storage_flat(thread_pool_t pool,
                                        size_t char_per_worker,
-                                       size_t *OUT_total_size)
+                                       size_t *OUT_aligned_size)
 {
         size_t size = ensure_worker_storage(pool, char_per_worker);
-        if (OUT_total_size != NULL)
-                *OUT_total_size = size;
+        if (OUT_aligned_size != NULL)
+                *OUT_aligned_size = size;
         return pool->storage;
 }
 

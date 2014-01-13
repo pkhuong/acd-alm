@@ -12,7 +12,7 @@ void * const * thread_pool_worker_storage(thread_pool_t,
                                           size_t char_per_worker);
 void * thread_pool_worker_storage_flat(thread_pool_t,
                                        size_t char_per_worker,
-                                       size_t * OUT_total_size);
+                                       size_t * OUT_aligned_size);
 
 void thread_pool_sleep(thread_pool_t);
 void thread_pool_wakeup(thread_pool_t);

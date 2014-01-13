@@ -7,13 +7,14 @@
 
 struct job
 {
-        size_t barrier_waiting_for;
         size_t id;
         size_t limit;
         size_t increment;
 
         thread_pool_function function;
         void * info;
+
+        unsigned barrier_waiting_for;
 };
 
 struct thread_pool

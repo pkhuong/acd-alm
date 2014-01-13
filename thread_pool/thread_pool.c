@@ -60,13 +60,12 @@ thread_pool_t thread_pool_init(unsigned nthreads)
 
 static void set_job(thread_pool_t pool, struct job * job)
 {
+        maybe_wake_up(pool);
         assert(pool->job == NULL);
         assert(job != NULL);
         if ((job != (struct job*)-1ul) && (job != (struct job*)-2ul))
                 assert(job->barrier_waiting_for
                        == (pool->nthreads+1));
-
-        maybe_wake_up(pool);
         __sync_fetch_and_add(&pool->job_sequence, 1);
         pool->job = job;
         __sync_synchronize();
@@ -103,8 +102,11 @@ void thread_pool_sleep(thread_pool_t pool)
 void thread_pool_wakeup(thread_pool_t pool)
 {
         if (!pool->sleeping) return;
+        assert((struct job*)-2ul == pool->job);
+
         pthread_mutex_lock(&pool->lock);
         pool->sleeping = 0;
+        pool->job = NULL;
         pthread_cond_broadcast(&pool->queue);
         pthread_mutex_unlock(&pool->lock);
 }
@@ -160,7 +162,7 @@ static void do_job(struct job * job, unsigned self)
 static void worker_sleep(thread_pool_t pool)
 {
         pthread_mutex_lock(&pool->lock);
-        while (pool->sleeping)
+        while ((pool->sleeping) || (pool->job == (struct job*)-2ul))
                 pthread_cond_wait(&pool->queue, &pool->lock);
         pthread_mutex_unlock(&pool->lock);
 }
@@ -201,6 +203,7 @@ static void init_job(struct job * job, thread_pool_t pool,
 
 static void execute_job(thread_pool_t pool, struct job * job)
 {
+        maybe_wake_up(pool);
         assert(NULL == pool->job);
         set_job(pool, job);
         do_job(job, 0);
@@ -238,6 +241,7 @@ void thread_pool_for(thread_pool_t pool,
 #ifdef TEST_THREAD_POOL
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 void sleep_test(size_t from, size_t end, void * info, unsigned id)
 {
@@ -257,6 +261,10 @@ int main (int argc, char **argv)
         unsigned n = 1024*1024;
         if (argc > 2)
                 n = atoi(argv[2]);
+        thread_pool_for(pool, 0, 1000, 1, sleep_test, &n);
+        thread_pool_sleep(pool);
+        printf("sleeping for 5 seconds\n");
+        sleep(5);
         thread_pool_for(pool, 0, 1000, 1, sleep_test, &n);
         thread_pool_free(pool);
         return 0;

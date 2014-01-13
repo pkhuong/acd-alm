@@ -200,7 +200,8 @@ void thread_pool_for(thread_pool_t pool,
 
         struct job job;
         init_job(&job, from, end, 
-                 ideal_granularity(end-from, granularity, pool->nthreads),
+                 ideal_granularity(end-from, granularity,
+                                   pool->nthreads+1),
                  function, info);
         execute_job(pool, &job);
 }

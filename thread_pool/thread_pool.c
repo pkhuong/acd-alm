@@ -109,7 +109,13 @@ static size_t ensure_worker_storage(thread_pool_t pool,
 {
         size_t aligned_size = (char_per_worker+63)&(~63);
         size_t nworkers = thread_pool_count(pool);
-        if (aligned_size > pool->allocated_bytes_per_worker) {
+        if (char_per_worker == 0) {
+                if (pool->allocated_bytes_per_worker) {
+                        huge_free(pool->storage);
+                        pool->storage = NULL;
+                        pool->allocated_bytes_per_worker = 0;
+                }
+        } else if (aligned_size > pool->allocated_bytes_per_worker) {
                 huge_free(pool->storage);
                 pool->storage = huge_calloc(nworkers, aligned_size);
                 pool->allocated_bytes_per_worker = aligned_size;

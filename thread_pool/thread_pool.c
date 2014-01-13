@@ -258,9 +258,14 @@ int main (int argc, char **argv)
         if (argc > 1)
                 nthread = atoi(argv[1]);
         thread_pool_t pool = thread_pool_init(nthread);
-        unsigned n = 1024*1024;
+        size_t n = 5000000;
         if (argc > 2)
                 n = atoi(argv[2]);
+
+        struct job job;
+        printf("barrier offset: %zu %p %zu\n",
+               __offsetof(struct job, barrier_waiting_for),
+               &job, n);
         thread_pool_for(pool, 0, 1000, 1, sleep_test, &n);
         thread_pool_sleep(pool);
         printf("sleeping for 5 seconds\n");

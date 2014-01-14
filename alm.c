@@ -84,6 +84,8 @@ alm_t alm_make(sparse_matrix_t constraints,
 
 int alm_free(alm_t alm)
 {
+        if (alm == NULL) return 0;
+
         free(alm->linear);
         free(alm->lambda_lower);
         free(alm->lambda_upper);

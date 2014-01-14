@@ -262,7 +262,7 @@ static int iter(struct alm_state * state, alm_t alm,
                         diag[2],
                         diag[0],
                         dot(x, alm->linear, alm->nvars));
-        update_precision(state, alm, state->violation);
+
         if (OUT_pg != NULL) *OUT_pg = diag[2];
         if (OUT_max_viol != NULL) *OUT_max_viol = max_viol;
 
@@ -270,11 +270,13 @@ static int iter(struct alm_state * state, alm_t alm,
         if (reason != 2) {
                 if (log != NULL)
                         fprintf(log, " -stalled-\n");
+                update_precision(state, alm, state->violation);
                 return 1;
         }
 
         state->prev_viol_norm = update_weights(alm, state->violation,
                                                state->prev_viol_norm);
+        update_precision(state, alm, state->violation);
         if (log != NULL)
                 fprintf(log, " (%8g)\n", norm_1(approx_weight(alm->approx),
                                                alm->nrhs)/alm->nrhs);

@@ -173,7 +173,7 @@ static struct job * get_job(thread_pool_t pool)
 {
         struct job * job = NULL;
         while (NULL == (job = pool->job))
-                __asm__("":::"memory");
+                __asm__("pause":::"memory");
 
         return job;
 }
@@ -193,7 +193,7 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
         }
 
         while (pool->job_sequence == sequence)
-                __asm__("":::"memory");
+                __asm__("pause":::"memory");
 }
 
 static void do_job(struct job * job, unsigned self)

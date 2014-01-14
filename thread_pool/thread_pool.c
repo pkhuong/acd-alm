@@ -84,9 +84,8 @@ void thread_pool_free(thread_pool_t pool)
 
         set_job(pool, (struct job*)-1ul);
 
-        void * scratch;
         for (unsigned i = 0; i < pool->nthreads; i++) {
-                int ret = pthread_join(pool->threads[i], &scratch);
+                int ret = pthread_join(pool->threads[i], NULL);
                 assert(0 == ret);
         }
         free(pool->threads);

@@ -11,7 +11,7 @@ void * huge_calloc(size_t n, size_t size)
         /* header + colouring */
         size_t padding = 2*sizeof(size_t) + 64*((offset++)%8); 
         padding = (padding+63ul)&(~63ul); /* round up to 64 bytes */
-        assert(padding < sysconf(_SC_PAGE_SIZE));
+        assert(padding < (size_t)sysconf(_SC_PAGE_SIZE));
         size_t bytes = n*size+padding+16; /* 16 byte slop for SIMD */
         void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
                           MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,

@@ -87,6 +87,8 @@ DEF(double *, upper)
 
 int approx_free(approx_t approx)
 {
+        if (approx == NULL) return 0;
+
         huge_free(approx->rhs);
         huge_free(approx->weight);
         huge_free(approx->linear);

@@ -19,6 +19,9 @@ struct job
         unsigned barrier_waiting_for __attribute__((aligned(64)));
 };
 
+#define STOP_JOB ((struct job*)-1ul)
+#define SLEEP_JOB ((struct job*)-2ul)
+
 struct thread_pool
 {
         unsigned long job_sequence __attribute__((aligned(64)));
@@ -28,7 +31,6 @@ struct thread_pool
         unsigned worker_id_counter;
         pthread_mutex_t lock;
         pthread_cond_t queue;
-        int sleeping;
         size_t allocated_bytes_per_worker __attribute__((aligned(64)));
         void * storage;
         void ** storage_vector;
@@ -36,7 +38,7 @@ struct thread_pool
 
 static inline void maybe_wake_up(thread_pool_t pool)
 {
-        if (pool->sleeping)
+        if (pool->job == SLEEP_JOB)
                 thread_pool_wakeup(pool);
 }
 
@@ -71,7 +73,7 @@ static void set_job(thread_pool_t pool, struct job * job)
         maybe_wake_up(pool);
         assert(pool->job == NULL);
         assert(job != NULL);
-        if ((job != (struct job*)-1ul) && (job != (struct job*)-2ul))
+        if ((job != STOP_JOB) && (job != SLEEP_JOB))
                 assert(job->barrier_waiting_for
                        == (pool->nthreads+1));
         int ret = __sync_bool_compare_and_swap(&pool->job, NULL, job);
@@ -82,7 +84,7 @@ void thread_pool_free(thread_pool_t pool)
 {
         if (pool == NULL) return;
 
-        set_job(pool, (struct job*)-1ul);
+        set_job(pool, STOP_JOB);
 
         for (unsigned i = 0; i < pool->nthreads; i++) {
                 int ret = pthread_join(pool->threads[i], NULL);
@@ -147,21 +149,17 @@ void * thread_pool_worker_storage_flat(thread_pool_t pool,
 
 void thread_pool_sleep(thread_pool_t pool)
 {
-        if (pool->sleeping) return;
+        if (pool->job == SLEEP_JOB) return;
         pthread_mutex_lock(&pool->lock);
-        set_job(pool, (struct job*)-2ul);
-        /* otherwise set_job will wake them back up! */
-        pool->sleeping = 1;
+        set_job(pool, SLEEP_JOB);
         pthread_mutex_unlock(&pool->lock);
 }
 
 void thread_pool_wakeup(thread_pool_t pool)
 {
-        if (!pool->sleeping) return;
-        assert((struct job*)-2ul == pool->job);
+        if (pool->job != SLEEP_JOB) return;
 
         pthread_mutex_lock(&pool->lock);
-        pool->sleeping = 0;
         pool->job = NULL;
         pthread_cond_broadcast(&pool->queue);
         pthread_mutex_unlock(&pool->lock);
@@ -214,7 +212,7 @@ static void do_job(struct job * job, unsigned self)
 static void worker_sleep(thread_pool_t pool)
 {
         pthread_mutex_lock(&pool->lock);
-        while ((pool->sleeping) || (pool->job == (struct job*)-2ul))
+        while (pool->job == SLEEP_JOB)
                 pthread_cond_wait(&pool->queue, &pool->lock);
         pthread_mutex_unlock(&pool->lock);
 }
@@ -227,9 +225,9 @@ static void * worker(void * thunk)
 
         while (1) {
                 struct job * job = get_job(pool);
-                if (job == (struct job*)-1UL)
+                if (job == STOP_JOB)
                         break;
-                if (job == (struct job*)-2ul) {
+                if (job == SLEEP_JOB) {
                         worker_sleep(pool);
                 } else {
                         do_job(job, worker_id);

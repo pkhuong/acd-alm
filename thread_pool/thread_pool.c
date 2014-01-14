@@ -201,11 +201,14 @@ static void do_job(struct job * job, unsigned self)
         while (1) {
                 size_t begin = job->id;
                 if (begin >= limit) break;
-                begin = __sync_fetch_and_add(&job->id, increment);
-                if (begin >= limit) break;
-                size_t n = limit-begin;
-                if (n > increment) n = increment;
-                function(begin, begin+n, info, self);
+                /* End of the work unit is the least of limit and
+                 * begin+increment */
+                size_t end = (((limit-begin) <= increment)
+                              ? limit
+                              : begin+increment);
+                /* Try and acquire work unit. */
+                if (__sync_bool_compare_and_swap(&job->id, begin, end))
+                        function(begin, end, info, self);
         }
 }
 

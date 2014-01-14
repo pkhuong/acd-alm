@@ -9,28 +9,51 @@
 
 struct job
 {
+        /* Beginning of the next work unit; atomically incremented. */
         size_t id __attribute__((aligned(64)));
+        /* Exclusive end of the last work unit. */
         size_t limit;
+        /* Size of work units. */
         size_t increment;
 
         thread_pool_function function;
         void * info;
 
+        /* Barrier to determine when all workers have seen this job
+         * and finished processing it.  Initialised to the number of
+         * workers, and atomically decremented until it reaches 0.
+         *
+         * Alignment avoids false sharing with id.
+         */
         unsigned barrier_waiting_for __attribute__((aligned(64)));
 };
 
+/* Pseudo jobs: STOP to terminate workers, and SLEEP to loop on
+ * pthread_mutex_t/pthread_cond_t. */
 #define STOP_JOB ((struct job*)-1ul)
 #define SLEEP_JOB ((struct job*)-2ul)
 
 struct thread_pool
 {
+        /* Sequence counter to determine when job has changed. Could
+         * be much smaller without any ABA problem: the barrier in
+         * jobs locks us out of unbounded increments. 
+         *
+         * Only incremented when a job is completely finished: all
+         * workers have completed, and job is NULLed out.
+         */
         unsigned long job_sequence;
+        /* Current job, NULL if none. */
         struct job * job;
         pthread_t * threads;
         unsigned nthreads;
+        /* Atomically incremented by threads on start-up: determines
+         * their worker id (master is 0). */
         unsigned worker_id_counter;
+        /* For sleep/wakeup */
         pthread_mutex_t lock;
         pthread_cond_t queue;
+        /* Cached worker-local storage. */
         size_t allocated_bytes_per_worker;
         void * storage;
         void ** storage_vector;
@@ -42,7 +65,7 @@ static inline void maybe_wake_up(thread_pool_t pool)
                 thread_pool_wakeup(pool);
 }
 
-static void * worker(void*);
+static void * worker(void*); /* implementation of worker loop below */
 
 thread_pool_t thread_pool_init(unsigned nthreads)
 {
@@ -183,6 +206,13 @@ static void release_job(thread_pool_t pool, struct job * job, int master)
         unsigned nactive
                 = __sync_sub_and_fetch(&job->barrier_waiting_for, 1);
         if (0 == nactive) {
+                /* We're the last to reach the barrier. Clear job
+                 * out and change the sequence number.
+                 *
+                 * No overflow issue: if all other workers have
+                 * reached the barrier, they're seen the latest
+                 * pool->job and previous sequence number!
+                 */
                 pool->job = NULL;
                 __sync_fetch_and_add(&pool->job_sequence, 1);
                 return;

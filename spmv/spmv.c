@@ -7,23 +7,11 @@
 #include <math.h>
 #include <xmmintrin.h>
 #include "../huge_alloc/huge_alloc.h"
+#include "../thread_pool/thread_pool.h"
 
 #ifdef USE_OSKI
 # include <oski/oski.h>
 #endif
-
-void sparse_matrix_init()
-{
-#ifdef USE_OSKI
-        oski_Init();
-#endif
-}
-
-#define SWAP(X, Y) do {                         \
-                __typeof__(X) temp = (X);       \
-                (X) = (Y);                      \
-                (Y) = temp;                     \
-        } while (0)
 
 struct csr
 {
@@ -32,27 +20,6 @@ struct csr
         uint32_t * columns;
         double * values;
 };
-
-#ifndef PREFETCH_DISTANCE
-# define PREFETCH_DISTANCE 0
-#endif
-
-static int init_csr(struct csr * csr, size_t nrows, size_t nnz)
-{
-        csr->nrows = nrows;
-        csr->rows_indices = calloc(nrows+1, sizeof(uint32_t));
-        csr->columns = huge_calloc(nnz+PREFETCH_DISTANCE, sizeof(uint32_t));
-        csr->values = huge_calloc(nnz+PREFETCH_DISTANCE, sizeof(double));
-        return 0;
-}
-
-static void free_csr(struct csr * csr)
-{
-        free(csr->rows_indices);
-        huge_free(csr->columns);
-        huge_free(csr->values);
-        memset(csr, 0, sizeof(struct csr));
-}
 
 struct sparse_matrix
 {
@@ -68,20 +35,17 @@ struct sparse_matrix
 #endif
 };
 
-#define DEF(TYPE, FIELD)                        \
-        TYPE sparse_matrix_##FIELD(sparse_matrix_t matrix)      \
-        {                                                       \
-                return matrix->FIELD;                           \
-        }
+#define SWAP(X, Y) do {                         \
+                __typeof__(X) temp = (X);       \
+                (X) = (Y);                      \
+                (Y) = temp;                     \
+        } while (0)
 
-DEF(size_t, ncolumns)
-DEF(size_t, nrows)
-DEF(size_t, nnz)
-DEF(const uint32_t *, rows)
-DEF(const uint32_t *, columns)
-DEF(const double *, values)
+#ifndef PREFETCH_DISTANCE
+# define PREFETCH_DISTANCE 0
+#endif
 
-#undef DEF
+#define PREFETCH_TYPE _MM_HINT_NTA
 
 struct matrix_entry {
         uint32_t column;
@@ -89,19 +53,6 @@ struct matrix_entry {
         double value;
         uint64_t swizzled;
 };
-
-static uint64_t swizzle(uint32_t x, uint32_t y)
-{
-        uint64_t acc = 0;
-        for (unsigned i = 0; i < 32; i++) {
-                uint64_t mask = 1ull<<i;
-                uint64_t xi = (x&mask)>>i;
-                uint64_t yi = (y&mask)>>i;
-                acc |= xi << (2*i);
-                acc |= yi << (2*i+1);
-        }
-        return acc;
-}
 
 static int compare_matrix_entries(const void * xp, const void * yp)
 {
@@ -114,99 +65,19 @@ static int compare_matrix_entries(const void * xp, const void * yp)
         return 0;
 }
 
-static int sparse_matrix_csr(sparse_matrix_t matrix, struct csr * csr,
-                             int transpose)
+/* FIXME: actually break these up in compilation units. */
+
+#include "spmv.csr.inc"
+#include "spmv.swizzle.inc"
+#ifdef USE_OSKI
+# include "spmv.oski.inc"
+#endif
+
+void sparse_matrix_init()
 {
-        uint32_t * columns = matrix->columns;
-        uint32_t * rows = matrix->rows;
-        double * values = matrix->values;
-
-        const size_t nnz = matrix->nnz,
-                ncolumns = matrix->ncolumns,
-                nrows = matrix->nrows;
-
-        /* QUite possible the stupidest way to construct a CSR matrix */
-        struct matrix_entry * entries
-                = calloc(nnz, sizeof(struct matrix_entry));
-        for (size_t i = 0; i < nnz; i++) {
-                uint32_t column = columns[i],
-                        row = rows[i];
-                assert(column < ncolumns);
-                assert(row < nrows);
-                if (transpose)
-                        SWAP(row, column);
-                entries[i] = (struct matrix_entry)
-                        {.column = column,
-                         .row = row,
-                         .value = values[i],
-                         .swizzled = ((uint64_t)row<<32
-                                      | (uint64_t)column)};
-        }
-
-        qsort(entries,
-              nnz, sizeof(struct matrix_entry),
-              compare_matrix_entries);
-
-        init_csr(csr, transpose?ncolumns:nrows, nnz);
-
-        for (size_t i = 0; i < nnz; i++) {
-                struct matrix_entry * entry = entries+i;
-                csr->rows_indices[entry->row+1]=i+1;
-                csr->columns[i] = entry->column;
-                csr->values[i] = entry->value;
-        }
-
-        size_t max = 0;
-        size_t n = transpose?ncolumns:nrows;
-        for (size_t i = 0; i <= n; i++) {
-                if (csr->rows_indices[i] > max)
-                        max = csr->rows_indices[i];
-                csr->rows_indices[i] = max;
-        }
-
-        free(entries);
-
-        return 0;
-}
-
-static int sparse_matrix_swizzle(sparse_matrix_t matrix)
-{
-        uint32_t * columns = matrix->columns;
-        uint32_t * rows = matrix->rows;
-        double * values = matrix->values;
-
-        const size_t nnz = matrix->nnz,
-                ncolumns = matrix->ncolumns,
-                nrows = matrix->nrows;
-
-        struct matrix_entry * entries
-                = calloc(nnz, sizeof(struct matrix_entry));
-        for (size_t i = 0; i < nnz; i++) {
-                uint32_t column = columns[i],
-                        row = rows[i];
-                assert(column < ncolumns);
-                assert(row < nrows);
-                entries[i] = (struct matrix_entry){.column = column,
-                                                   .row = row,
-                                                   .value = values[i],
-                                                   .swizzled = swizzle(column,
-                                                                       row)};
-        }
-
-        qsort(entries,
-              nnz, sizeof(struct matrix_entry),
-              compare_matrix_entries);
-
-        for (size_t i = 0; i < nnz; i++) {
-                struct matrix_entry * entry = entries+i;
-                columns[i] = entry->column;
-                rows[i] = entry->row;
-                values[i] = entry->value;
-        }
-
-        free(entries);
-
-        return 0;
+#ifdef USE_OSKI
+        oski_Init();
+#endif
 }
 
 sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
@@ -276,254 +147,20 @@ int sparse_matrix_free(sparse_matrix_t matrix)
         return 0;
 }
 
-#define PREFETCH_TYPE _MM_HINT_NTA
-
-static void mult(double * out,
-                 size_t nnz,
-                 const uint32_t * columns, const uint32_t * rows,
-                 const double * values,
-                 const double * x)
-{
-        for (size_t i = 0; i < nnz; i++) {
-                uint32_t col = columns[i],
-                        row = rows[i];
-                double ax = values[i]*x[col];
-                out[row] += ax;
-#if PREFETCH_DISTANCE
-                _mm_prefetch(x+columns[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
-                _mm_prefetch(out+rows[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
-#endif
-        }
-}
-
-static void mult2(double ** out,
-                 size_t nnz,
-                 const uint32_t * columns, const uint32_t * rows,
-                 const double * values,
-                 const double ** x)
-{
-        double * out0 = out[0], * out1 = out[1];
-        const double * x0 = x[0], * x1 = x[1];
-        for (size_t i = 0; i < nnz; i++) {
-                uint32_t col = columns[i],
-                        row = rows[i];
-                double v = values[i];
-                out0[row] += v*x0[col];
-                out1[row] += v*x1[col];
-#if PREFETCH_DISTANCE
-                _mm_prefetch(x0+columns[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
-                _mm_prefetch(x1+columns[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
-                _mm_prefetch(out0+rows[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
-                _mm_prefetch(out1+rows[i+PREFETCH_DISTANCE], PREFETCH_TYPE);
-#endif
-        }
-}
-
-static void mult_csr(double * out, struct csr * csr, const double * x)
-{
-        size_t nrows = csr->nrows;
-        const uint32_t * rows_indices = csr->rows_indices,
-                * columns = csr->columns;
-        const double * values = csr->values;
-        size_t ncoupled_rows = nrows&(~1ull);
-        size_t i;
-        for (i = 0; i < ncoupled_rows; i+=2) {
-                uint32_t begin = rows_indices[i],
-                        middle = rows_indices[i+1],
-                        end = rows_indices[i+2];
-                double acc0 = 0, acc1 = 0;
-                uint32_t n0 = middle-begin, n1 = end-middle;
-                const double * v0 = values+begin,
-                        * v1 = values+middle;
-                const uint32_t * c0 = columns+begin,
-                        * c1 = columns+middle;
-                uint32_t j;
-                if (n0 <= n1) {
-                        for (j = 0; j < n0; j++) {
-                                acc0 += v0[j]*x[c0[j]];
-                                acc1 += v1[j]*x[c1[j]];
-                        }
-                        out[i] = acc0;
-                        for (; j < n1; j++)
-                                acc1 += v1[j]*x[c1[j]];
-                        out[i+1] = acc1;
-                } else {
-                        for (j = 0; j < n1; j++) {
-                                acc0 += v0[j]*x[c0[j]];
-                                acc1 += v1[j]*x[c1[j]];
-                        }
-                        out[i+1] = acc1;
-                        for (; j < n0; j++)
-                                acc0 += v0[j]*x[c0[j]];
-                        out[i] = acc0;
-                }
-        }
-        if (i < nrows) {
-                uint32_t begin = rows_indices[i],
-                        end = rows_indices[i+1];
-                double acc = 0;
-                for (; begin < end; begin++)
-                        acc += values[begin]*x[columns[begin]];
-                out[i] = acc;
-        }
-}
-
-struct mult_csr_subrange_info
-{
-        double * out;
-        struct csr * csr;
-        const double * x;
-};
-
-static void mult_csr_subrange(size_t from, size_t end, void * info, 
-                              unsigned id)
-{
-        (void)id;
-        struct mult_csr_subrange_info * info_struct = info;
-        double * out = info_struct->out;
-        struct csr * csr = info_struct->csr;
-        const double * x = info_struct->x;
-
-        struct csr subcsr = *csr;
-        subcsr.nrows = end-from;
-        subcsr.rows_indices = csr->rows_indices+from;
-        mult_csr(out+from, &subcsr, x);
-}
-
-static void mult_csr2(double ** out, struct csr * csr, const double ** x)
-{
-        size_t nrows = csr->nrows;
-        const uint32_t * rows_indices = csr->rows_indices,
-                * columns = csr->columns;
-        const double * values = csr->values;
-        double * out0 = out[0], * out1 = out[1];
-        const double * x0 = x[0], * x1 = x[1];
-        size_t ncoupled_rows = nrows&(~1ull);
-        size_t i;
-        for (i = 0; i < ncoupled_rows; i+=2) {
-                uint32_t begin = rows_indices[i],
-                        middle = rows_indices[i+1],
-                        end = rows_indices[i+2];
-                double acc0_0 = 0, acc1_0 = 0; /* x0 */
-                double acc0_1 = 0, acc1_1 = 0; /* x1 */
-                uint32_t n0 = middle-begin, n1 = end-middle;
-                const double * v0 = values+begin,
-                        * v1 = values+middle;
-                const uint32_t * c0 = columns+begin,
-                        * c1 = columns+middle;
-                uint32_t j;
-                if (n0 <= n1) {
-                        for (j = 0; j < n0; j++) {
-                                acc0_0 += v0[j]*x0[c0[j]];
-                                acc1_0 += v1[j]*x0[c1[j]];
-                                acc0_1 += v0[j]*x1[c0[j]];
-                                acc1_1 += v1[j]*x1[c1[j]];
-                        }
-                        out0[i] = acc0_0;
-                        out1[i] = acc0_1;
-                        for (; j < n1; j++) {
-                                acc1_0 += v1[j]*x0[c1[j]];
-                                acc1_1 += v1[j]*x1[c1[j]];
-                        }
-                        out0[i+1] = acc1_0;
-                        out1[i+1] = acc1_1;
-                } else {
-                        for (j = 0; j < n1; j++) {
-                                acc0_0 += v0[j]*x0[c0[j]];
-                                acc1_0 += v1[j]*x0[c1[j]];
-                                acc0_1 += v0[j]*x1[c0[j]];
-                                acc1_1 += v1[j]*x1[c1[j]];
-                        }
-                        out0[i+1] = acc1_0;
-                        out1[i+1] = acc1_1;
-                        for (; j < n0; j++) {
-                                acc0_0 += v0[j]*x0[c0[j]];
-                                acc0_1 += v0[j]*x1[c0[j]];
-                        }
-                        out0[i] = acc0_0;
-                        out1[i] = acc0_1;
-                }
+#define DEF(TYPE, FIELD)                        \
+        TYPE sparse_matrix_##FIELD(sparse_matrix_t matrix)      \
+        {                                                       \
+                return matrix->FIELD;                           \
         }
 
-        if (i < nrows) {
-                uint32_t begin = rows_indices[i],
-                        end = rows_indices[i+1];
-                double acc0 = 0, acc1 = 0;
-                for (; begin < end; begin++) {
-                        double v = values[begin];
-                        uint32_t col = columns[begin];
-                        acc0 += v*x0[col];
-                        acc1 += v*x1[col];
-                }
-                out0[i] = acc0;
-                out1[i] = acc1;
-        }
-}
+DEF(size_t, ncolumns)
+DEF(size_t, nrows)
+DEF(size_t, nnz)
+DEF(const uint32_t *, rows)
+DEF(const uint32_t *, columns)
+DEF(const double *, values)
 
-struct mult_csr2_subrange_info
-{
-        double ** out;
-        struct csr * csr;
-        const double ** x;
-};
-
-static void mult_csr2_subrange(size_t from, size_t end, void * info, 
-                               unsigned id)
-{
-        (void)id;
-        struct mult_csr2_subrange_info * info_struct = info;
-        double ** out = info_struct->out;
-        struct csr * csr = info_struct->csr;
-        const double ** x = info_struct->x;
-
-        double * out2[] = {out[0]+from, out[1]+from};
-        struct csr subcsr = *csr;
-        subcsr.nrows = end-from;
-        subcsr.rows_indices = csr->rows_indices+from;
-        mult_csr2(out2, &subcsr, x);
-}
-
-#ifdef USE_OSKI
-static void mult_oski(double * out, size_t nout,
-                      oski_matrix_t matrix,
-                      const double * x, size_t nx,
-                      int transpose)
-{
-        oski_vecview_t x_view = oski_CreateVecView((double*)x, nx,
-                                                   STRIDE_UNIT);
-        oski_vecview_t y_view = oski_CreateVecView(out, nout,
-                                                   STRIDE_UNIT);
-
-        oski_MatMult(matrix, transpose?OP_TRANS:OP_NORMAL,
-                     1, x_view, 0, y_view);
-        oski_DestroyVecView(x_view);
-        oski_DestroyVecView(y_view);
-}
-
-static void mult_oski2(double ** out, size_t nout, double * flat_out,
-                       oski_matrix_t matrix,
-                       const double ** x, size_t nx, double * flat_in,
-                       int transpose)
-{
-        memcpy(flat_in, x[0], sizeof(double)*nx);
-        memcpy(flat_in+nx, x[1], sizeof(double)*nx);
-
-        oski_vecview_t x_view 
-                = oski_CreateMultiVecView(flat_in, nx, 2,
-                                          LAYOUT_COLMAJ, nx);
-        oski_vecview_t y_view
-                = oski_CreateMultiVecView(flat_out, nout, 2,
-                                          LAYOUT_COLMAJ, nout);
-
-        oski_MatMult(matrix, transpose?OP_TRANS:OP_NORMAL,
-                     1, x_view, 0, y_view);
-        oski_DestroyVecView(x_view);
-        oski_DestroyVecView(y_view);
-
-        memcpy(out[0], flat_out, sizeof(double)*nout);
-        memcpy(out[1], flat_out+nout, sizeof(double)*nout);
-}
-#endif
+#undef DEF
 
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t a,

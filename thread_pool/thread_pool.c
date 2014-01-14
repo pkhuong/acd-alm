@@ -9,14 +9,14 @@
 
 struct job
 {
-        size_t id __attribute__ ((aligned(64)));
+        size_t id __attribute__((aligned(64)));
         size_t limit;
         size_t increment;
 
         thread_pool_function function;
         void * info;
 
-        unsigned barrier_waiting_for __attribute__ ((aligned(64)));
+        unsigned barrier_waiting_for __attribute__((aligned(64)));
 };
 
 struct thread_pool

@@ -21,9 +21,9 @@ size_t thread_pool_count(thread_pool_t);
  * of nworker void pointers.  This array is reused on each call to
  * thread_pool_worker_storage and is freed by thread_pool_free.
  *
- * The function pads allocations to try and guarantee that each worker
- * get its own cache line (and thus avoid false sharing).  Each
- * worker's data is zero-initialised.
+ * The function aligns and pads allocations to try and guarantee that
+ * each worker get its own cache line (and thus avoid false sharing).
+ * Each worker's data is zero-initialised.
  *
  * The storage is also always recycled; char_per_worker = 0 will
  * deallocate the internal backing vector.

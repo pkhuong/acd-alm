@@ -254,6 +254,7 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg,
                 &state->x, &state->z,
                 pool);
         {
+                /* FIXME: state->g not always needed! */
                 struct vector * g[2] = {&state->g, &state->g2};
                 struct vector * violation[2] = {&state->violation,
                                                 &state->violation2};
@@ -311,8 +312,9 @@ iter(approx_t approx, struct approx_state * state, double * OUT_pg,
                 }
         }
 
-        *OUT_pg = project_gradient_norm(&state->g, &state->z,
-                                        approx->lower, approx->upper);
+        if (OUT_pg != NULL)
+                *OUT_pg = project_gradient_norm(&state->g, &state->z,
+                                                approx->lower, approx->upper);
 
         if ((!descent_achieved) /* Value improvement OK */
             && (dot_diff(&state->g, &state->z, &state->zp) > 0)) {
@@ -399,7 +401,10 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         int restart = 0, reason = 0;
         for (i = 0; i < niter; i++) {
                 delta = HUGE_VAL;
-                center = iter(approx, &state, &pg, pool);
+                pg = HUGE_VAL;
+                center = iter(approx, &state,
+                              ((i+1)%10 == 0)?&pg:NULL,
+                              pool);
                 if (center == &state.x) {
                         if (!restart) {
                                 restart = 1;

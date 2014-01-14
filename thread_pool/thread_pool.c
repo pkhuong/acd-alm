@@ -24,14 +24,14 @@ struct job
 
 struct thread_pool
 {
-        unsigned long job_sequence __attribute__((aligned(64)));
+        unsigned long job_sequence;
         struct job * job;
         pthread_t * threads;
         unsigned nthreads;
         unsigned worker_id_counter;
         pthread_mutex_t lock;
         pthread_cond_t queue;
-        size_t allocated_bytes_per_worker __attribute__((aligned(64)));
+        size_t allocated_bytes_per_worker;
         void * storage;
         void ** storage_vector;
 };

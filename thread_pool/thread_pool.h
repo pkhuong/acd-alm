@@ -5,18 +5,18 @@
 #include <stddef.h>
 
 /* NULL means no thread pool, i.e., serial execution */
-typedef struct thread_pool * thread_pool_t;
+typedef struct thread_pool thread_pool_t;
 
 /* Allocate a new thread pool for n workers; the caller (master)
  * counts as a worker, so one fewer thread is spawned.  If nworker is
  * 0, it is treated as 1. */
-thread_pool_t thread_pool_init(unsigned nworker);
+thread_pool_t * thread_pool_init(unsigned nworker);
 /* Terminate worker threads and free the pool. Safe to call on NULL. */
-void thread_pool_free(thread_pool_t);
+void thread_pool_free(thread_pool_t *);
 
 /* Number of workers, including the master (i.e., one more than the
  * number of threads in the pool). */
-size_t thread_pool_count(thread_pool_t);
+size_t thread_pool_count(thread_pool_t *);
 /* Allocate char_per_worker space for each worker, and return an array
  * of nworker void pointers.  This array is reused on each call to
  * thread_pool_worker_storage and is freed by thread_pool_free.
@@ -28,12 +28,12 @@ size_t thread_pool_count(thread_pool_t);
  * The storage is also always recycled; char_per_worker = 0 will
  * deallocate the internal backing vector.
  */
-void * const * thread_pool_worker_storage(thread_pool_t,
+void * const * thread_pool_worker_storage(thread_pool_t *,
                                           size_t char_per_worker);
 /* Instead return the backing vector directly.  If OUT_aligned_size is
  * non-NULL, the padded allocation size per worker is stored there.
  */
-void * thread_pool_worker_storage_flat(thread_pool_t,
+void * thread_pool_worker_storage_flat(thread_pool_t *,
                                        size_t char_per_worker,
                                        size_t * OUT_aligned_size);
 
@@ -43,8 +43,8 @@ void * thread_pool_worker_storage_flat(thread_pool_t,
  *
  * Workers will be woken up if necessary when a new job is executed.
  */
-void thread_pool_sleep(thread_pool_t);
-void thread_pool_wakeup(thread_pool_t);
+void thread_pool_sleep(thread_pool_t *);
+void thread_pool_wakeup(thread_pool_t *);
 
 /* Parallel dotimes: calls a function for each size_t value in [from, end).
  *
@@ -62,7 +62,7 @@ void thread_pool_wakeup(thread_pool_t);
  */
 typedef void (*thread_pool_function)(size_t begin, size_t end, void * info,
                                      unsigned worker_id);
-void thread_pool_for(thread_pool_t,
+void thread_pool_for(thread_pool_t *,
                      size_t from, size_t end, size_t granularity,
                      thread_pool_function function, void * info);
 
@@ -82,7 +82,7 @@ typedef double (*thread_pool_map)(size_t begin, size_t end, void * info,
 enum thread_pool_reducer{THREAD_POOL_REDUCE_SUM,
                          THREAD_POOL_REDUCE_MAX,
                          THREAD_POOL_REDUCE_MIN};
-double thread_pool_map_reduce(thread_pool_t,
+double thread_pool_map_reduce(thread_pool_t *,
                               size_t from, size_t end, size_t granularity,
                               thread_pool_map function, void * info,
                               enum thread_pool_reducer reducer,

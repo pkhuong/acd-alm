@@ -246,7 +246,7 @@ static void update_precision(struct alm_state * state, alm_t alm,
 static int iter(struct alm_state * state, alm_t alm,
                 double * x, double * lambda, FILE * log, size_t k,
                 double * OUT_pg, double * OUT_max_viol,
-                thread_pool_t pool)
+                thread_pool_t * pool)
 {
         double offset = penalise_linear(alm, lambda);
         double diag[5];
@@ -288,7 +288,7 @@ static int iter(struct alm_state * state, alm_t alm,
 int alm_solve(alm_t alm, size_t niter, double * x, size_t nvars,
               double * lambda, size_t nconstraints,
               FILE * log, double * OUT_diagnosis, 
-              thread_pool_t pool)
+              thread_pool_t * pool)
 {
         struct alm_state state;
         assert(nvars == alm->nvars);
@@ -374,7 +374,7 @@ int main (int argc, char ** argv)
         if (argc > 2)
                 nthreads = atoi(argv[2]);
 
-        thread_pool_t pool = NULL;
+        thread_pool_t * pool = NULL;
         if (nthreads >= 0)
                 pool = thread_pool_init(nthreads);
         double * x = calloc(alm_nvars(alm), sizeof(double)),

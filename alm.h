@@ -12,11 +12,11 @@
  **/
 #ifndef ALM_H
 #define ALM_H
+#include <stddef.h>
+#include <stdio.h>
 #include "spmv/spmv.h"
 #include "approx/approx.h"
 #include "thread_pool/thread_pool.h"
-#include <stddef.h>
-#include <stdio.h>
 
 typedef struct alm * alm_t;
 /* Allocate an alm instance. Everything is copied, except the
@@ -100,7 +100,7 @@ int alm_solve(alm_t, size_t niter,
               double * x, size_t nvars,
               double * lambda, size_t nconstraints,
               FILE * log, double * OUT_diagnosis,
-              thread_pool_t pool);
+              thread_pool_t * pool);
 
 /* Read a plain text LP instance
  *

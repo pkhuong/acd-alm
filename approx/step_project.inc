@@ -101,7 +101,7 @@ long_step(struct vector * zpv, double theta, double length,
           const struct vector * gv, const struct vector * zv,
           const double * restrict lower, const double * restrict upper,
           const double * restrict inv_v, const double * restrict vs,
-          thread_pool_t pool)
+          thread_pool_t * pool)
 {
         size_t n = zpv->n;
         assert(gv->n == n);

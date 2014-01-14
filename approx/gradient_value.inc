@@ -1,5 +1,5 @@
 static void compute_violation(struct vector * xv, approx_t approx,
-                              thread_pool_t pool)
+                              thread_pool_t * pool)
 {
         size_t nvars = xv->n,
                 nrows = xv->nviolation;
@@ -18,7 +18,7 @@ static void compute_violation(struct vector * xv, approx_t approx,
         xv->violationp = 1;
 }
 
-static double value(approx_t approx, struct vector * xv, thread_pool_t pool)
+static double value(approx_t approx, struct vector * xv, thread_pool_t * pool)
 {
         size_t nvars = xv->n;
         size_t nrows = xv->nviolation;
@@ -58,7 +58,7 @@ static double value(approx_t approx, struct vector * xv, thread_pool_t pool)
 static void gradient(struct vector * OUT_grad,
                      approx_t approx, struct vector * OUT_scaled,
                      struct vector * xv, double * OUT_value,
-                     thread_pool_t pool)
+                     thread_pool_t * pool)
 {
         size_t nvars = OUT_grad->n,
                 nrows = xv->nviolation;
@@ -114,7 +114,7 @@ static void gradient(struct vector * OUT_grad,
 static void gradient2(struct vector ** OUT_grad,
                       approx_t approx, struct vector ** OUT_scaled,
                       struct vector ** xv, double ** OUT_value,
-                      thread_pool_t pool)
+                      thread_pool_t * pool)
 {
         size_t nvars = OUT_grad[0]->n,
                 nrows = xv[0]->nviolation;

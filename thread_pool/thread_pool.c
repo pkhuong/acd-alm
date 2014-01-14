@@ -59,7 +59,7 @@ struct thread_pool
         void ** storage_vector;
 };
 
-static inline void maybe_wake_up(thread_pool_t pool)
+static inline void maybe_wake_up(thread_pool_t * pool)
 {
         if (pool->job == SLEEP_JOB)
                 thread_pool_wakeup(pool);
@@ -67,13 +67,13 @@ static inline void maybe_wake_up(thread_pool_t pool)
 
 static void * worker(void*); /* implementation of worker loop below */
 
-thread_pool_t thread_pool_init(unsigned nthreads)
+thread_pool_t * thread_pool_init(unsigned nthreads)
 {
         /* implicit worker: the caller */
         if (nthreads == 0) nthreads = 1;
         unsigned allocated_threads = nthreads-1;
 
-        thread_pool_t pool = calloc(1, sizeof(struct thread_pool));
+        thread_pool_t * pool = calloc(1, sizeof(thread_pool_t));
         pool->threads = calloc(allocated_threads, sizeof(pthread_t));
         pool->nthreads = allocated_threads;
         pthread_mutex_init(&pool->lock, NULL);
@@ -91,7 +91,7 @@ thread_pool_t thread_pool_init(unsigned nthreads)
         return pool;
 }
 
-static void set_job(thread_pool_t pool, struct job * job)
+static void set_job(thread_pool_t * pool, struct job * job)
 {
         maybe_wake_up(pool);
         assert(pool->job == NULL);
@@ -103,7 +103,7 @@ static void set_job(thread_pool_t pool, struct job * job)
         assert(ret && "concurrent use of thread pool");
 }
 
-void thread_pool_free(thread_pool_t pool)
+void thread_pool_free(thread_pool_t * pool)
 {
         if (pool == NULL) return;
 
@@ -118,16 +118,16 @@ void thread_pool_free(thread_pool_t pool)
         pthread_cond_destroy(&pool->queue);
         huge_free(pool->storage);
         free(pool->storage_vector);
-        memset(pool, 0, sizeof(struct thread_pool));
+        memset(pool, 0, sizeof(thread_pool_t));
         free(pool);
 }
 
-size_t thread_pool_count(thread_pool_t pool)
+size_t thread_pool_count(thread_pool_t * pool)
 {
         return 1+pool->nthreads;
 }
 
-static size_t ensure_worker_storage(thread_pool_t pool,
+static size_t ensure_worker_storage(thread_pool_t * pool,
                                     size_t char_per_worker)
 {
         size_t aligned_size = (char_per_worker+63)&(~63);
@@ -153,14 +153,14 @@ static size_t ensure_worker_storage(thread_pool_t pool,
         return aligned_size;
 }
 
-void * const * thread_pool_worker_storage(thread_pool_t pool,
+void * const * thread_pool_worker_storage(thread_pool_t * pool,
                                           size_t char_per_worker)
 {
         ensure_worker_storage(pool, char_per_worker);
         return pool->storage_vector;
 }
 
-void * thread_pool_worker_storage_flat(thread_pool_t pool,
+void * thread_pool_worker_storage_flat(thread_pool_t * pool,
                                        size_t char_per_worker,
                                        size_t *OUT_aligned_size)
 {
@@ -170,7 +170,7 @@ void * thread_pool_worker_storage_flat(thread_pool_t pool,
         return pool->storage;
 }
 
-void thread_pool_sleep(thread_pool_t pool)
+void thread_pool_sleep(thread_pool_t * pool)
 {
         if (pool->job == SLEEP_JOB) return;
         pthread_mutex_lock(&pool->lock);
@@ -178,7 +178,7 @@ void thread_pool_sleep(thread_pool_t pool)
         pthread_mutex_unlock(&pool->lock);
 }
 
-void thread_pool_wakeup(thread_pool_t pool)
+void thread_pool_wakeup(thread_pool_t * pool)
 {
         if (pool->job != SLEEP_JOB) return;
 
@@ -188,7 +188,7 @@ void thread_pool_wakeup(thread_pool_t pool)
         pthread_mutex_unlock(&pool->lock);
 }
 
-static struct job * get_job(thread_pool_t pool)
+static struct job * get_job(thread_pool_t * pool)
 {
         struct job * job = NULL;
         while (NULL == (job = pool->job))
@@ -197,7 +197,7 @@ static struct job * get_job(thread_pool_t pool)
         return job;
 }
 
-static void release_job(thread_pool_t pool, struct job * job, int master)
+static void release_job(thread_pool_t * pool, struct job * job, int master)
 {
         (void)master;
         assert(job->barrier_waiting_for > 0);
@@ -242,7 +242,7 @@ static void do_job(struct job * job, unsigned self)
         }
 }
 
-static void worker_sleep(thread_pool_t pool)
+static void worker_sleep(thread_pool_t * pool)
 {
         pthread_mutex_lock(&pool->lock);
         while (pool->job == SLEEP_JOB)
@@ -252,7 +252,7 @@ static void worker_sleep(thread_pool_t pool)
 
 static void * worker(void * thunk)
 {
-        thread_pool_t pool = thunk;
+        thread_pool_t * pool = thunk;
         unsigned worker_id
                 = __sync_add_and_fetch(&pool->worker_id_counter, 1);
 
@@ -271,7 +271,7 @@ static void * worker(void * thunk)
         return NULL;
 }
 
-static void init_job(struct job * job, thread_pool_t pool,
+static void init_job(struct job * job, thread_pool_t * pool,
                      size_t begin, size_t end, size_t granularity,
                      thread_pool_function function, void * info)
 {
@@ -284,7 +284,7 @@ static void init_job(struct job * job, thread_pool_t pool,
         job->info = info;
 }
 
-static void execute_job(thread_pool_t pool, struct job * job)
+static void execute_job(thread_pool_t * pool, struct job * job)
 {
         maybe_wake_up(pool);
         assert(NULL == pool->job);
@@ -301,7 +301,7 @@ static size_t ideal_granularity(size_t n, size_t minimum, unsigned nthreads)
         return minimum*((n+nchunks-1)/nchunks);
 }
 
-void thread_pool_for(thread_pool_t pool,
+void thread_pool_for(thread_pool_t * pool,
                      size_t from, size_t end, size_t granularity,
                      thread_pool_function function, void * info)
 {
@@ -351,7 +351,7 @@ static void map_reduce_worker(size_t begin, size_t end, void * thunk,
         }
 }
 
-double thread_pool_map_reduce(thread_pool_t pool,
+double thread_pool_map_reduce(thread_pool_t * pool,
                               size_t from, size_t end, size_t granularity,
                               thread_pool_map function, void * info,
                               enum thread_pool_reducer reducer,
@@ -430,7 +430,7 @@ int main (int argc, char **argv)
         unsigned nthread = 0;
         if (argc > 1)
                 nthread = atoi(argv[1]);
-        thread_pool_t pool = thread_pool_init(nthread);
+        thread_pool_t * pool = thread_pool_init(nthread);
         size_t n = 5000000;
         if (argc > 2)
                 n = atoi(argv[2]);

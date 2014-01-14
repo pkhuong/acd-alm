@@ -51,7 +51,7 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t a,
                            const double * x, size_t nx,
                            int transpose,
-                           thread_pool_t pool);
+                           thread_pool_t * pool);
 /* Multiply a pair of vectors. x and OUT_y are arrays of two pointers;
  * the arguments are otherwise as in the single-vector case above.
  * This is equivalent to calling sparse_matrix_multiply on OUT_y[0]
@@ -63,7 +63,7 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                              const sparse_matrix_t a,
                              const double ** x, size_t nx,
                              int transpose,
-                             thread_pool_t pool);
+                             thread_pool_t * pool);
 
 /* Read a sparse matrix in text format. The first three integers are #
  * rows, # columns, # nonzeros.

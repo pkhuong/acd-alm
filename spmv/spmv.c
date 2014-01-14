@@ -165,7 +165,7 @@ DEF(const double *, values)
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t a,
                            const double * x, size_t nx,
-                           int transpose, thread_pool_t pool)
+                           int transpose, thread_pool_t * pool)
 {
         (void)pool;
         size_t nrows = a->nrows,
@@ -202,7 +202,7 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
 int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                              const sparse_matrix_t a,
                              const double ** x, size_t nx,
-                             int transpose, thread_pool_t pool)
+                             int transpose, thread_pool_t * pool)
 {
         (void)pool;
         size_t nrows = a->nrows,

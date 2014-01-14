@@ -5,6 +5,7 @@
 #include <string.h>
 #include <strings.h>
 #include "../huge_alloc/huge_alloc.h"
+#include "../thread_pool/thread_pool.h"
 
 struct approx {
         size_t nrhs, nvars;
@@ -250,7 +251,7 @@ static void destroy_state(struct approx_state * state)
 
 static const struct vector *
 iter(approx_t approx, struct approx_state * state, double * OUT_pg,
-     thread_pool_t pool)
+     thread_pool_t * pool)
 {
         linterp(&state->y, state->theta,
                 &state->x, &state->z,
@@ -382,7 +383,7 @@ static void print_log(FILE * log, size_t k,
 int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                  double max_pg, double max_value, double min_delta,
                  FILE * log, size_t period, double * OUT_diagnosis,
-                 double offset, thread_pool_t pool)
+                 double offset, thread_pool_t * pool)
 {
         assert(n == approx->nvars);
 

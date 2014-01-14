@@ -81,7 +81,7 @@ static void linterp_1(size_t from, size_t to, void * data, unsigned id)
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,
                     const struct vector * xv, const struct vector * zv,
-                    thread_pool_t pool)
+                    thread_pool_t * pool)
 {
         assert(theta >= 0);
         assert(theta <= 1);

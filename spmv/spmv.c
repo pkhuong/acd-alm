@@ -258,6 +258,8 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
 
 int sparse_matrix_free(sparse_matrix_t matrix)
 {
+        if (matrix == NULL)
+                return 0;
         huge_free(matrix->rows);
         huge_free(matrix->columns);
         huge_free(matrix->values);
@@ -606,6 +608,7 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
 sparse_matrix_t sparse_matrix_read(FILE * stream)
 {
         size_t nrows, ncolumns, nnz;
+        assert(stream != NULL);
         assert(3 == fscanf(stream, " %zu %zu %zu",
                            &nrows, &ncolumns, &nnz));
 

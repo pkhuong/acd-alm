@@ -402,9 +402,12 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         for (i = 0; i < niter; i++) {
                 delta = HUGE_VAL;
                 pg = HUGE_VAL;
-                center = iter(approx, &state,
-                              ((i+1)%10 == 0)?&pg:NULL,
-                              pool);
+                {
+                        double * pgp = NULL;
+                        if ((i == 0) || ((i+1)%10 == 0))
+                                pgp = &pg;
+                        center = iter(approx, &state, pgp, pool);
+                }
                 if (center == &state.x) {
                         if (!restart) {
                                 restart = 1;

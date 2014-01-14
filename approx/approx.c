@@ -408,6 +408,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                         }
                         if (log != NULL)
                                 fprintf(log, "R");
+                        fflush(log);
                 }
                 ng = norm_2(&state.g);
                 value = state.value;

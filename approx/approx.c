@@ -353,7 +353,7 @@ static double diff(const double * x, const double * y, size_t n)
 static double norm_2(const struct vector * xv)
 {
         size_t n = (xv->n+1)/2;
-        const v2d * x = (v2d*)xv->x+1;
+        const v2d * x = (v2d*)xv->x;
         v2d acc = {0, 0};
         for (size_t i = 0; i < n; i++) {
                 v2d xi = x[i];

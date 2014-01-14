@@ -74,9 +74,8 @@ static void set_job(thread_pool_t pool, struct job * job)
         if ((job != (struct job*)-1ul) && (job != (struct job*)-2ul))
                 assert(job->barrier_waiting_for
                        == (pool->nthreads+1));
-        __sync_fetch_and_add(&pool->job_sequence, 1);
-        pool->job = job;
-        __sync_synchronize();
+        int ret = __sync_bool_compare_and_swap(&pool->job, NULL, job);
+        assert(ret && "concurrent use of thread pool");
 }
 
 void thread_pool_free(thread_pool_t pool)

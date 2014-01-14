@@ -330,8 +330,9 @@ double thread_pool_map_reduce(thread_pool_t pool,
         assert(reducer >= THREAD_POOL_REDUCE_SUM);
         assert(reducer <= THREAD_POOL_REDUCE_MIN);
         size_t n = thread_pool_count(pool);
-        double * const * storage =
-                (double * const *)thread_pool_worker_storage(pool, 8);
+        double * const * storage
+                = ((double * const *)
+                   thread_pool_worker_storage(pool, sizeof(double)));
         if (initial_value != 0) {
                 for (size_t i = 0; i < n; i++)
                         *storage[i] = initial_value;

@@ -396,7 +396,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
         memcpy(prev_x, state.x.x, n*sizeof(double));
 
         const struct vector * center = &state.x;
-        double value = state.value;
+        double value = state.value+offset;
         double ng = HUGE_VAL, pg = HUGE_VAL;
         double delta = HUGE_VAL;
         size_t i;
@@ -420,8 +420,8 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                 fprintf(log, "R");
                         fflush(log);
                 }
-                ng = norm_2(&state.g);
-                value = state.value;
+
+                value = state.value+offset;
                 if (value < max_value) {
                         reason = 1;
                         break;
@@ -461,7 +461,8 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                                 restart = 0;
                                 printf("\n");
                         }
-                        print_log(log, i+1, value+offset, ng, pg,
+                        ng = norm_2(&state.g);
+                        print_log(log, i+1, value, ng, pg,
                                   state.step_length, delta);
                 }
         }
@@ -469,12 +470,22 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
                 restart = 0;
                 printf("\n");
         }
-        print_log(log, i+1, value+offset, ng, pg,
+
+        delta = diff(prev_x, center->x, n)/(norm_2(center)+1e-10);
+        gradient(&state.g, approx, &state.violation,
+                 (struct vector *)center, &value, pool);
+        value += offset;
+        ng = norm_2(&state.g);
+        /* We're about to free center, anyway */
+        pg = project_gradient_norm(&state.g, center,
+                                   approx->lower, approx->upper);
+
+        print_log(log, i+1, value, ng, pg,
                   state.step_length, delta);
 
         memcpy(x, center->x, n*sizeof(double));
         if (OUT_diagnosis != NULL) {
-                OUT_diagnosis[0] = value+offset;
+                OUT_diagnosis[0] = value;
                 OUT_diagnosis[1] = ng;
                 OUT_diagnosis[2] = pg;
                 OUT_diagnosis[3] = delta;

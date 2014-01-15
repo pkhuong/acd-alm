@@ -50,6 +50,18 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
         memcpy(matrix->columns, columns, nnz*sizeof(uint32_t));
         memcpy(matrix->values, values, nnz*sizeof(double));
 
+        if (permute) {
+                sparse_permutation_init(&matrix->row_permutation,
+                                        matrix, 1);
+                sparse_permutation_init(&matrix->col_permutation,
+                                        matrix, 0);
+        } else {
+                sparse_permutation_identity(&matrix->row_permutation,
+                                            matrix->nrows);
+                sparse_permutation_identity(&matrix->col_permutation,
+                                            matrix->ncolumns);
+        }
+
         sparse_matrix_csr(matrix, &matrix->matrix, 0);
         sparse_matrix_csr(matrix, &matrix->transpose, 1);
         sparse_matrix_swizzle(matrix);
@@ -72,17 +84,6 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
         matrix->flat_input = huge_calloc(n*2, sizeof(double));
         matrix->flat_result = huge_calloc(n*2, sizeof(double));
 #endif
-        if (permute) {
-                sparse_permutation_init(&matrix->row_permutation,
-                                        matrix, 1);
-                sparse_permutation_init(&matrix->col_permutation,
-                                        matrix, 0);
-        } else {
-                sparse_permutation_identity(&matrix->row_permutation,
-                                            matrix->nrows);
-                sparse_permutation_identity(&matrix->col_permutation,
-                                            matrix->ncolumns);
-        }
         return matrix;
 }
 

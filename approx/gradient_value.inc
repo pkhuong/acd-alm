@@ -136,24 +136,22 @@ static void gradient2(struct vector ** OUT_grad,
 
         for (size_t i = 0; i < 2; i++) {
                 v2d * scaled = (v2d*)OUT_scaled[i]->x;
-                {
-                        const v2d * weight = (v2d*)approx->weight;
-                        v2d * viol = (v2d*)xv[i]->violation;
-                        size_t n = (nrows+1)/2;
-                        if (OUT_value[i] == NULL) {
-                                for (size_t i = 0; i < n; i++)
-                                        scaled[i] = weight[i]*viol[i];
-                        } else {
-                                v2d value = {0,0};
-                                for (size_t i = 0; i < n; i++) {
-                                        v2d v = viol[i];
-                                        v2d w = weight[i];
-                                        v2d s = v*w;
-                                        value += s*v;
-                                        scaled[i] = s;
-                                }
-                                *OUT_value[i] = .5*(value[0]+value[1]);
+                const v2d * weight = (v2d*)approx->weight;
+                v2d * viol = (v2d*)xv[i]->violation;
+                size_t n = (nrows+1)/2;
+                if (OUT_value[i] == NULL) {
+                        for (size_t i = 0; i < n; i++)
+                                scaled[i] = weight[i]*viol[i];
+                } else {
+                        v2d value = {0,0};
+                        for (size_t i = 0; i < n; i++) {
+                                v2d v = viol[i];
+                                v2d w = weight[i];
+                                v2d s = v*w;
+                                value += s*v;
+                                scaled[i] = s;
                         }
+                        *OUT_value[i] = .5*(value[0]+value[1]);
                 }
         }
 

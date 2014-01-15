@@ -32,6 +32,9 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                      const double * values,
                                      int permute)
 {
+#if defined(USE_OSKI) || defined(SWIZZLED_MULT)
+        assert(!permute);
+#endif
         sparse_matrix_t * matrix = calloc(1, sizeof(sparse_matrix_t));
         matrix->ncolumns = ncolumns;
         matrix->nrows = nrows;

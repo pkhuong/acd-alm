@@ -78,6 +78,93 @@ static void linterp_1(size_t from, size_t to, void * data, unsigned id)
                 OUT_y[i] = scale2*x[i]+theta2*z[i];
 }
 
+struct linterp2_state
+{
+        v2d scale2, theta2;
+        v2d * OUT_y[2];
+        const v2d * x[2], * z[2];
+        size_t n0; /* n0 <= n1 */
+};
+
+static void linterp_2(size_t from, size_t to, void * data, unsigned id)
+{
+        (void)id;
+        struct linterp2_state * state = data;
+        v2d scale2 = state->scale2, theta2 = state->theta2;
+        v2d * OUT_y0 = state->OUT_y[0],
+                * OUT_y1 = state->OUT_y[1];
+        const v2d * x0 = state->x[0],
+                * x1 = state->x[1],
+                * z0 = state->z[0],
+                * z1 = state->z[1];
+        size_t n0 = state->n0;
+
+        if (to <= n0) {
+                for (size_t i = from; i < to; i++) {
+                        OUT_y0[i] = scale2*x0[i]+theta2*z0[i];
+                        OUT_y1[i] = scale2*x1[i]+theta2*z1[i];
+                }
+        } else if (from >= n0) {
+                for (size_t i = from; i < to; i++)
+                        OUT_y1[i] = scale2*x1[i]+theta2*z1[i];
+        } else {
+                size_t i;
+                for (i = from; i < n0; i++) {
+                        OUT_y0[i] = scale2*x0[i]+theta2*z0[i];
+                        OUT_y1[i] = scale2*x1[i]+theta2*z1[i];
+                }
+                for (; i < to; i++)
+                        OUT_y1[i] = scale2*x1[i]+theta2*z1[i];
+        }
+}
+
+#define SWAP(X, Y) do {                         \
+                __typeof__(X) temp = (X);       \
+                (X) = (Y);                      \
+                (Y) = temp;                     \
+        } while (0)
+
+
+static void linterp_both(thread_pool_t * pool,
+                         double scale, double theta,
+                         double * OUT_y0, size_t n0,
+                         const double * x0, const double * z0,
+                         double * OUT_y1, size_t n1,
+                         const double * x1, const double * z1)
+{
+        if (n0 > n1) {
+                SWAP(OUT_y0, OUT_y1);
+                SWAP(n0, n1);
+                SWAP(x0, x1);
+                SWAP(z0, z1);
+        }
+
+        struct linterp2_state state
+                = {.scale2 = {scale, scale},
+                   .theta2 = {theta, theta},
+                   .OUT_y = {(v2d*)OUT_y0, (v2d*)OUT_y1},
+                   .x = {(const v2d*)x0, (const v2d*)x1},
+                   .z = {(const v2d*)z0, (const v2d*)z1},
+                   .n0 = (n0+1)/2};
+        thread_pool_for(pool, 0, (n1+1)/2, 64,
+                        linterp_2, &state);
+}
+                         
+#undef SWAP
+
+static void linterp_single(thread_pool_t * pool,
+                           double scale, double theta,
+                           double * OUT_y, size_t n,
+                           const double * x, const double * z)
+{
+        struct linterp_state state
+                = {.scale2 = {scale, scale},
+                   .theta2 = {theta, theta},
+                   .OUT_y = (v2d*)OUT_y,
+                   .x = (const v2d*)x, .z = (const v2d*)z};
+        thread_pool_for(pool, 0, (n+1)/2, 64, linterp_1, &state);
+}
+
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,
                     const struct vector * xv, const struct vector * zv,
@@ -90,37 +177,18 @@ static void linterp(struct vector * OUT_yv, double theta,
         assert(xv->n == nvars);
         assert(zv->n == nvars);
 
-        v2d scale2 = {scale, scale}, theta2 = {theta, theta};
-
-        {
-                v2d * OUT_y = (v2d*)OUT_yv->x;
-                const v2d * x = (v2d*)xv->x, * z = (v2d*)zv->x;
-                size_t n = (nvars+1)/2;
-                struct linterp_state state
-                        = {.scale2 = scale2,
-                           .theta2 = theta2,
-                           .OUT_y = OUT_y,
-                           .x = x, .z = z};
-                thread_pool_for(pool, 0, n, 64, linterp_1, &state);
-        }
-
         size_t nviolation = OUT_yv->nviolation;
         if (nviolation && xv->violationp && zv->violationp) {
                 assert(xv->nviolation == nviolation);
                 assert(zv->nviolation == nviolation);
-                v2d * OUT_y = (v2d*)OUT_yv->violation;
-                const v2d * x = (v2d*)xv->violation,
-                        * z = (v2d*)zv->violation;
-                size_t n = (nviolation+1)/2;
-
-                struct linterp_state state
-                        = {.scale2 = scale2,
-                           .theta2 = theta2,
-                           .OUT_y = OUT_y,
-                           .x = x, .z = z};
-                thread_pool_for(pool, 0, n, 64, linterp_1, &state);
+                linterp_both(pool, scale, theta,
+                             OUT_yv->x, nvars, xv->x, zv->x,
+                             OUT_yv->violation, nviolation,
+                             xv->violation, zv->violation);
                 OUT_yv->violationp = 1;
         } else {
+                linterp_single(pool, scale, theta,
+                               OUT_yv->x, nvars, xv->x, zv->x);
                 OUT_yv->violationp = 0;
         }
         OUT_yv->value = nan("");

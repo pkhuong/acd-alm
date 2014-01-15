@@ -250,7 +250,7 @@ static int iter(struct alm_state * state, alm_t * alm,
 {
         double offset = penalise_linear(alm, lambda);
         double diag[5];
-        approx_update_step_sizes(alm->approx);
+        approx_update(alm->approx);
         int reason = approx_solve(x, alm->nvars, alm->approx, -1u,
                                   state->precision, -HUGE_VAL, 1e-11,
                                   log, 10000, diag, offset, pool);

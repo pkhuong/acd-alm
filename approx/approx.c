@@ -19,6 +19,8 @@ struct approx {
         uint32_t * beta;
         double * v;
         double * inv_v;
+
+        approx_t * permuted;
 };
 
 static double * copy_double(const double * x, size_t n)
@@ -40,12 +42,12 @@ static double * copy_double_default(const double * x, size_t n, double missing)
         return out;
 }
 
-approx_t * approx_make(sparse_matrix_t * constraints,
-                       size_t nrhs, const double * rhs,
-                       const double * weight,
-                       size_t nvars,
-                       const double * linear,
-                       const double * lower, const double * upper)
+static approx_t * approx_make_1(sparse_matrix_t * constraints,
+                                size_t nrhs, const double * rhs,
+                                const double * weight,
+                                size_t nvars,
+                                const double * linear,
+                                const double * lower, const double * upper)
 {
         assert(nrhs == sparse_matrix_nrows(constraints));
         assert(nvars == sparse_matrix_ncolumns(constraints));
@@ -64,13 +66,32 @@ approx_t * approx_make(sparse_matrix_t * constraints,
         approx->v = huge_calloc(nvars, sizeof(double));
         approx->inv_v = huge_calloc(nvars, sizeof(double));
 
-        approx_update_step_sizes(approx);
+        return approx;
+}
 
+approx_t * approx_make(sparse_matrix_t * constraints,
+                       size_t nrhs, const double * rhs,
+                       const double * weight,
+                       size_t nvars,
+                       const double * linear,
+                       const double * lower, const double * upper)
+{
+        approx_t * approx = approx_make_1(constraints,
+                                          nrhs, rhs,
+                                          weight,
+                                          nvars, linear, lower, upper);
+
+        approx->permuted = approx_make_1(constraints,
+                                         nrhs, rhs,
+                                         weight,
+                                         nvars, linear, lower, upper);
+
+        approx_update(approx);
         return approx;
 }
 
 #define DEF(TYPE, FIELD)                                        \
-        TYPE approx_##FIELD(approx_t * approx)                    \
+        TYPE approx_##FIELD(approx_t * approx)                  \
         {                                                       \
                 return approx->FIELD;                           \
         }
@@ -90,6 +111,8 @@ int approx_free(approx_t * approx)
 {
         if (approx == NULL) return 0;
 
+        approx_free(approx->permuted);
+
         huge_free(approx->rhs);
         huge_free(approx->weight);
         huge_free(approx->linear);
@@ -104,7 +127,7 @@ int approx_free(approx_t * approx)
         return 0;
 }
 
-int approx_update_step_sizes(approx_t * approx)
+static int approx_update_step_size(approx_t * approx)
 {
         assert(approx->nrhs == sparse_matrix_nrows(approx->matrix));
         assert(approx->nvars == sparse_matrix_ncolumns(approx->matrix));
@@ -146,6 +169,41 @@ int approx_update_step_sizes(approx_t * approx)
                 else    inv_v[i] = 1.0/vi;
         }
 
+        return 0;
+}
+
+int approx_update(approx_t * approx)
+{
+        assert(!approx_update_step_size(approx));
+
+        assert(!sparse_matrix_row_permute(approx->matrix,
+                                          approx->permuted->rhs,
+                                          approx->nrhs,
+                                          approx->rhs, 1));
+        assert(!sparse_matrix_row_permute(approx->matrix,
+                                          approx->permuted->weight,
+                                          approx->nrhs,
+                                          approx->weight, 1));
+        assert(!sparse_matrix_col_permute(approx->matrix,
+                                          approx->permuted->linear,
+                                          approx->nvars,
+                                          approx->linear, 1));
+        assert(!sparse_matrix_col_permute(approx->matrix,
+                                          approx->permuted->lower,
+                                          approx->nvars,
+                                          approx->lower, 1));
+        assert(!sparse_matrix_col_permute(approx->matrix,
+                                          approx->permuted->upper,
+                                          approx->nvars,
+                                          approx->upper, 1));
+        assert(!sparse_matrix_col_permute(approx->matrix,
+                                          approx->permuted->v,
+                                          approx->nvars,
+                                          approx->v, 1));        
+        assert(!sparse_matrix_col_permute(approx->matrix,
+                                          approx->permuted->inv_v,
+                                          approx->nvars,
+                                          approx->inv_v, 1));
         return 0;
 }
 

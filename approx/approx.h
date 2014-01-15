@@ -64,12 +64,12 @@ double * approx_linear(approx_t *);
 double * approx_lower(approx_t *);
 double * approx_upper(approx_t *);
 
-/* This must be called after any modification to the objective function
- * (i.e. matrix, weight, or linear; changes to rhs are OK).
+/* This must be called after any modification to the instance
+ * (i.e. matrix, weight, rhs, linear, or bounds)
  *
  * Returns 0 on success.
  */
-int approx_update_step_sizes(approx_t *);
+int approx_update(approx_t *);
 
 /* Solve an approx instance, starting from an the initial solution x.
  *

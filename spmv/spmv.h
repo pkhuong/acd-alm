@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include "../thread_pool/thread_pool.h"
 
-typedef struct sparse_matrix * sparse_matrix_t;
+typedef struct sparse_matrix sparse_matrix_t;
 /* Must be called once, before creating any sparse matrix */
 void sparse_matrix_init();
 
@@ -16,24 +16,24 @@ void sparse_matrix_init();
  * triplet of arrays, instead of an array of triplets).  The entries
  * can be in any order, as long as they never repeat.  Will eventually
  * return NULL on error. */
-sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
+sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                    size_t nnz,
                                    const uint32_t * rows,
                                    const uint32_t * columns,
                                    const double * values);
 /* Free a sparse matrix; NULL are ignored.  Will eventually return
  * non-zero on error. */
-int sparse_matrix_free(sparse_matrix_t);
+int sparse_matrix_free(sparse_matrix_t *);
 
 /* Read-only accessors for the matrix; there is no guarantee on the
  * order of the coordinates.
  */
-size_t sparse_matrix_ncolumns(sparse_matrix_t);
-size_t sparse_matrix_nrows(sparse_matrix_t);
-size_t sparse_matrix_nnz(sparse_matrix_t);
-const uint32_t * sparse_matrix_rows(sparse_matrix_t);
-const uint32_t * sparse_matrix_columns(sparse_matrix_t);
-const double * sparse_matrix_values(sparse_matrix_t);
+size_t sparse_matrix_ncolumns(sparse_matrix_t *);
+size_t sparse_matrix_nrows(sparse_matrix_t *);
+size_t sparse_matrix_nnz(sparse_matrix_t *);
+const uint32_t * sparse_matrix_rows(sparse_matrix_t *);
+const uint32_t * sparse_matrix_columns(sparse_matrix_t *);
+const double * sparse_matrix_values(sparse_matrix_t *);
 
 /* Actual multiplication. OUT_y <- op(A) x.
  *  op is identity if transpose = 0, transpose otherwise.
@@ -48,7 +48,7 @@ const double * sparse_matrix_values(sparse_matrix_t);
  * default case is a unrolled-and-jammed parallel CSR/CSC loop.
  */
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
-                           const sparse_matrix_t a,
+                           const sparse_matrix_t * a,
                            const double * x, size_t nx,
                            int transpose,
                            thread_pool_t * pool);
@@ -60,7 +60,7 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
  * expose more memory-level parallelism).
  */
 int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
-                             const sparse_matrix_t a,
+                             const sparse_matrix_t * a,
                              const double ** x, size_t nx,
                              int transpose,
                              thread_pool_t * pool);
@@ -72,5 +72,5 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
  *
  * Returns NULL on failure.
  */
-sparse_matrix_t sparse_matrix_read(FILE * stream);
+sparse_matrix_t * sparse_matrix_read(FILE * stream);
 #endif

@@ -38,7 +38,7 @@ typedef struct approx * approx_t;
  *
  * Will one day return NULL on error.
  */
-approx_t approx_make(sparse_matrix_t constraints, /* Must remain alive */
+approx_t approx_make(sparse_matrix_t * constraints, /* Must remain alive */
                      size_t nrhs, const double * rhs, const double * weight,
                      size_t nvars,
                      const double * linear,
@@ -55,7 +55,7 @@ int approx_free(approx_t);
 
 /* Accessors for the approx object's internal vectors.
  */
-sparse_matrix_t approx_matrix(approx_t);
+sparse_matrix_t * approx_matrix(approx_t);
 size_t approx_nrhs(approx_t);
 double * approx_rhs(approx_t);
 double * approx_weight(approx_t);

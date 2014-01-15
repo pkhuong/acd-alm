@@ -80,13 +80,13 @@ void sparse_matrix_init()
 #endif
 }
 
-sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
+sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                    size_t nnz,
                                    const uint32_t * rows,
                                    const uint32_t * columns,
                                    const double * values)
 {
-        sparse_matrix_t matrix = calloc(1, sizeof(struct sparse_matrix));
+        sparse_matrix_t * matrix = calloc(1, sizeof(struct sparse_matrix));
         matrix->ncolumns = ncolumns;
         matrix->nrows = nrows;
         matrix->nnz = nnz;
@@ -127,7 +127,7 @@ sparse_matrix_t sparse_matrix_make(size_t ncolumns, size_t nrows,
         return matrix;
 }
 
-int sparse_matrix_free(sparse_matrix_t matrix)
+int sparse_matrix_free(sparse_matrix_t * matrix)
 {
         if (matrix == NULL)
                 return 0;
@@ -148,7 +148,7 @@ int sparse_matrix_free(sparse_matrix_t matrix)
 }
 
 #define DEF(TYPE, FIELD)                        \
-        TYPE sparse_matrix_##FIELD(sparse_matrix_t matrix)      \
+        TYPE sparse_matrix_##FIELD(sparse_matrix_t * matrix)      \
         {                                                       \
                 return matrix->FIELD;                           \
         }
@@ -163,7 +163,7 @@ DEF(const double *, values)
 #undef DEF
 
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
-                           const sparse_matrix_t a,
+                           const sparse_matrix_t * a,
                            const double * x, size_t nx,
                            int transpose, thread_pool_t * pool)
 {
@@ -188,10 +188,10 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
         mult_oski(OUT_y, ny, a->oski_matrix, x, nx, transpose);
 #else
         {
-                struct mult_csr_subrange_info info;
-                info.out = OUT_y;
-                info.csr = transpose?&a->transpose:&a->matrix;
-                info.x = x;
+                struct mult_csr_subrange_info info
+                        = {.out = OUT_y,
+                           .csr = transpose?&a->transpose:&a->matrix,
+                           .x = x};
                 thread_pool_for(pool, 0, info.csr->nrows, 16,
                                 mult_csr_subrange, &info);
         }
@@ -200,7 +200,7 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
 }
 
 int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
-                             const sparse_matrix_t a,
+                             const sparse_matrix_t * a,
                              const double ** x, size_t nx,
                              int transpose, thread_pool_t * pool)
 {
@@ -229,10 +229,10 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                    transpose);
 #else
         {
-                struct mult_csr2_subrange_info info;
-                info.out = OUT_y;
-                info.csr = transpose?&a->transpose:&a->matrix;
-                info.x = x;
+                struct mult_csr2_subrange_info info
+                        = {.out = OUT_y,
+                           .csr = transpose?&a->transpose:&a->matrix,
+                           .x = x};
                 thread_pool_for(pool, 0, info.csr->nrows, 16,
                                 mult_csr2_subrange, &info);
         }
@@ -242,7 +242,7 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
 
 #undef SWAP
 
-sparse_matrix_t sparse_matrix_read(FILE * stream)
+sparse_matrix_t * sparse_matrix_read(FILE * stream)
 {
         size_t nrows, ncolumns, nnz;
         assert(stream != NULL);
@@ -257,7 +257,7 @@ sparse_matrix_t sparse_matrix_read(FILE * stream)
                 assert(3 == fscanf(stream, " %u %u %lf",
                                    rows+i, columns+i, values+i));
 
-        sparse_matrix_t m = sparse_matrix_make(ncolumns, nrows,
+        sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows,
                                                nnz,
                                                rows, columns, values);
         free(rows);
@@ -287,7 +287,7 @@ void random_vector(double * vector, size_t n)
                 vector[i] = ((2.0*random())/RAND_MAX)-1;
 }
 
-sparse_matrix_t sparsify_matrix(const double * matrix,
+sparse_matrix_t * sparsify_matrix(const double * matrix,
                                 size_t nrows, size_t ncolumns)
 {
         size_t total_size = nrows*ncolumns;
@@ -307,7 +307,7 @@ sparse_matrix_t sparsify_matrix(const double * matrix,
                 }
         }
 
-        sparse_matrix_t m = sparse_matrix_make(ncolumns, nrows, nnz,
+        sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows, nnz,
                                                rows, columns, values);
         free(rows);
         free(columns);
@@ -357,7 +357,7 @@ void random_test(size_t ncolumns, size_t nrows, size_t repeat)
                 * y2t = calloc(ncolumns, sizeof(double));
 
         fill_random_matrix(dense, nrows, ncolumns, .5);
-        sparse_matrix_t m = sparsify_matrix(dense, nrows, ncolumns);
+        sparse_matrix_t * m = sparsify_matrix(dense, nrows, ncolumns);
 
         for (size_t i = 0; i < repeat; i++) {
                 random_vector(x, ncolumns);

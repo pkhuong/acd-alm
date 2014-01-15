@@ -9,7 +9,7 @@
 
 struct approx {
         size_t nrhs, nvars;
-        sparse_matrix_t matrix;
+        sparse_matrix_t * matrix;
         double * rhs;
         double * weight; /* \sum_i weight_i [(Ax-b)_i]^2 */
         double * linear; /* linear x + [LS] */
@@ -40,7 +40,7 @@ static double * copy_double_default(const double * x, size_t n, double missing)
         return out;
 }
 
-approx_t approx_make(sparse_matrix_t constraints,
+approx_t approx_make(sparse_matrix_t * constraints,
                      size_t nrhs, const double * rhs,
                      const double * weight,
                      size_t nvars,
@@ -75,7 +75,7 @@ approx_t approx_make(sparse_matrix_t constraints,
                 return approx->FIELD;                           \
         }
 
-DEF(sparse_matrix_t, matrix)
+DEF(sparse_matrix_t *, matrix)
 DEF(size_t, nrhs)
 DEF(double *, rhs)
 DEF(double *, weight)
@@ -115,7 +115,7 @@ int approx_update_step_sizes(approx_t approx)
         memset(beta, 0, approx->nrhs*sizeof(uint32_t));
         memset(v, 0, approx->nvars*sizeof(double));
 
-        sparse_matrix_t matrix = approx->matrix;
+        sparse_matrix_t * matrix = approx->matrix;
         size_t nnz = sparse_matrix_nnz(matrix);
         const uint32_t * rows = sparse_matrix_rows(matrix),
                 * columns = sparse_matrix_columns(matrix);
@@ -500,7 +500,7 @@ int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
 }
 
 #ifdef TEST_APPROX
-sparse_matrix_t random_matrix(size_t nrows, size_t ncolumns)
+sparse_matrix_t * random_matrix(size_t nrows, size_t ncolumns)
 {
         size_t total = nrows*ncolumns;
         size_t nnz = 0;
@@ -520,7 +520,7 @@ sparse_matrix_t random_matrix(size_t nrows, size_t ncolumns)
                 }
         }
 
-        sparse_matrix_t m = sparse_matrix_make(ncolumns, nrows, nnz,
+        sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows, nnz,
                                                rows, columns, values);
         free(values);
         free(rows);
@@ -537,7 +537,7 @@ void random_vector(double * vector, size_t n)
 
 void test_1(size_t nrows, size_t ncolumns)
 {
-        sparse_matrix_t m = random_matrix(nrows, ncolumns);
+        sparse_matrix_t * m = random_matrix(nrows, ncolumns);
         double * solution = calloc(ncolumns, sizeof(double));
         random_vector(solution, ncolumns);
         double * rhs = calloc(nrows, sizeof(double));

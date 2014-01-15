@@ -40,7 +40,7 @@ typedef struct alm * alm_t;
  *
  * Will eventually return NULL on error.
  */
-alm_t alm_make(sparse_matrix_t constraints,
+alm_t alm_make(sparse_matrix_t * constraints,
                size_t nrhs, const double * rhs,
                size_t nvars, const double * linear,
                const double * lower, const double * upper,
@@ -56,7 +56,7 @@ int alm_free(alm_t);
  * objective vectors can be modified, as can the lower/upper bound
  * vectors (both primal and dual)
  */
-sparse_matrix_t alm_matrix(alm_t);
+sparse_matrix_t * alm_matrix(alm_t);
 size_t alm_nrhs(alm_t);
 double * alm_rhs(alm_t);
 size_t alm_nvars(alm_t);

@@ -11,7 +11,7 @@ static uint64_t swizzle(uint32_t x, uint32_t y)
         return acc;
 }
 
-static int sparse_matrix_swizzle(sparse_matrix_t matrix)
+static int sparse_matrix_swizzle(sparse_matrix_t * matrix)
 {
         uint32_t * columns = matrix->columns;
         uint32_t * rows = matrix->rows;

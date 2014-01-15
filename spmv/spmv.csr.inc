@@ -15,7 +15,7 @@ static void free_csr(struct csr * csr)
         memset(csr, 0, sizeof(struct csr));
 }
 
-static int sparse_matrix_csr(sparse_matrix_t matrix, struct csr * csr,
+static int sparse_matrix_csr(sparse_matrix_t * matrix, struct csr * csr,
                              int transpose)
 {
         uint32_t * columns = matrix->columns;
@@ -122,7 +122,7 @@ static void mult_csr(double * out, struct csr * csr, const double * x)
 struct mult_csr_subrange_info
 {
         double * out;
-        struct csr * csr;
+        const struct csr * csr;
         const double * x;
 };
 
@@ -132,7 +132,7 @@ static void mult_csr_subrange(size_t from, size_t end, void * info,
         (void)id;
         struct mult_csr_subrange_info * info_struct = info;
         double * out = info_struct->out;
-        struct csr * csr = info_struct->csr;
+        const struct csr * csr = info_struct->csr;
         const double * x = info_struct->x;
 
         struct csr subcsr = *csr;
@@ -214,7 +214,7 @@ static void mult_csr2(double ** out, struct csr * csr, const double ** x)
 struct mult_csr2_subrange_info
 {
         double ** out;
-        struct csr * csr;
+        const struct csr * csr;
         const double ** x;
 };
 
@@ -224,7 +224,7 @@ static void mult_csr2_subrange(size_t from, size_t end, void * info,
         (void)id;
         struct mult_csr2_subrange_info * info_struct = info;
         double ** out = info_struct->out;
-        struct csr * csr = info_struct->csr;
+        const struct csr * csr = info_struct->csr;
         const double ** x = info_struct->x;
 
         double * out2[] = {out[0]+from, out[1]+from};

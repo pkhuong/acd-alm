@@ -257,6 +257,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 &state->x, &state->z,
                 pool, 1);
         {
+                assert(!isnan(state->z.value));
                 assert(state->z.violationp);
                 assert(state->y.violationp);
                 /* FIXME: state->g not always needed! */
@@ -335,6 +336,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
         linterp(&state->x, state->theta,
                 &state->x, &state->zp,
                 pool, 0);
+        value(approx, &state->zp, pool);
         state->theta = next_theta(state->theta);
         {
                 /* swap */
@@ -395,6 +397,7 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
 
         set_vector(&state.x, x, approx);
         compute_violation(&state.x, approx, pool);
+        value(approx, &state.x, pool);
         copy_vector(&state.z, &state.x);
         double * prev_x = huge_calloc(n, sizeof(double));
         memcpy(prev_x, state.x.x, n*sizeof(double));

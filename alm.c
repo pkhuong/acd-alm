@@ -9,7 +9,7 @@ struct alm {
         size_t nrhs, nvars;
         sparse_matrix_t * matrix;
         double * linear;
-        approx_t approx;
+        approx_t * approx;
 
         double * lambda_lower, * lambda_upper;
 };

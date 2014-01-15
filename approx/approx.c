@@ -40,17 +40,17 @@ static double * copy_double_default(const double * x, size_t n, double missing)
         return out;
 }
 
-approx_t approx_make(sparse_matrix_t * constraints,
-                     size_t nrhs, const double * rhs,
-                     const double * weight,
-                     size_t nvars,
-                     const double * linear,
-                     const double * lower, const double * upper)
+approx_t * approx_make(sparse_matrix_t * constraints,
+                       size_t nrhs, const double * rhs,
+                       const double * weight,
+                       size_t nvars,
+                       const double * linear,
+                       const double * lower, const double * upper)
 {
         assert(nrhs == sparse_matrix_nrows(constraints));
         assert(nvars == sparse_matrix_ncolumns(constraints));
 
-        approx_t approx = calloc(1, sizeof(struct approx));
+        approx_t * approx = calloc(1, sizeof(approx_t));
         approx->nrhs = nrhs;
         approx->nvars = nvars;
         approx->matrix = constraints;
@@ -70,7 +70,7 @@ approx_t approx_make(sparse_matrix_t * constraints,
 }
 
 #define DEF(TYPE, FIELD)                                        \
-        TYPE approx_##FIELD(approx_t approx)                    \
+        TYPE approx_##FIELD(approx_t * approx)                    \
         {                                                       \
                 return approx->FIELD;                           \
         }
@@ -86,7 +86,7 @@ DEF(double *, upper)
 
 #undef DEF
 
-int approx_free(approx_t approx)
+int approx_free(approx_t * approx)
 {
         if (approx == NULL) return 0;
 
@@ -98,13 +98,13 @@ int approx_free(approx_t approx)
         huge_free(approx->beta);
         huge_free(approx->v);
         huge_free(approx->inv_v);
-        memset(approx, 0, sizeof(struct approx));
+        memset(approx, 0, sizeof(approx_t));
         free(approx);
 
         return 0;
 }
 
-int approx_update_step_sizes(approx_t approx)
+int approx_update_step_sizes(approx_t * approx)
 {
         assert(approx->nrhs == sparse_matrix_nrows(approx->matrix));
         assert(approx->nvars == sparse_matrix_ncolumns(approx->matrix));
@@ -250,7 +250,7 @@ static void destroy_state(struct approx_state * state)
 }
 
 static const struct vector *
-iter(approx_t approx, struct approx_state * state, double * OUT_pg,
+iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
      thread_pool_t * pool)
 {
         linterp(&state->y, state->theta,
@@ -380,7 +380,7 @@ static void print_log(FILE * log, size_t k,
                        k, value, ng, pg, step);
 }
 
-int approx_solve(double * x, size_t n, approx_t approx, size_t niter,
+int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                  double max_pg, double max_value, double min_delta,
                  FILE * log, size_t period, double * OUT_diagnosis,
                  double offset, thread_pool_t * pool)
@@ -547,7 +547,7 @@ void test_1(size_t nrows, size_t ncolumns)
                                            m, solution, ncolumns, 0,
                                            NULL));
 
-        approx_t a = approx_make(m, nrows, rhs, NULL, ncolumns,
+        approx_t * a = approx_make(m, nrows, rhs, NULL, ncolumns,
                                  NULL, NULL, NULL);
         double diagnosis[5];
         int r = approx_solve(x, ncolumns, a, -1U,

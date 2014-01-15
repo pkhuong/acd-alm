@@ -44,7 +44,7 @@ static void project(struct vector * xv,
                     const double * lower, const double * upper);
 
 static void set_vector(struct vector * x, const double * src,
-                       approx_t approx)
+                       approx_t * approx)
 {
         memcpy(x->x, src, x->n*sizeof(double));
         project(x, approx->lower, approx->upper);

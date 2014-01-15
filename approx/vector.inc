@@ -278,6 +278,7 @@ static void linterp_xy(struct vector * OUT_yv, struct vector * OUT_xv,
                        double theta, double next_theta,
                        thread_pool_t * pool)
 {
+        (void)linterp; /* general version is obsolete */
         assert(theta >= 0);
         assert(theta <= 1);
         assert(next_theta >= 0);

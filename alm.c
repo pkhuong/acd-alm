@@ -15,7 +15,7 @@ struct alm {
 };
 
 #define DEF(TYPE, FIELD)                                        \
-        TYPE alm_##FIELD(alm_t alm)                             \
+        TYPE alm_##FIELD(alm_t * alm)                             \
         {                                                       \
                 return alm->FIELD;                              \
         }
@@ -29,17 +29,17 @@ DEF(double *, lambda_upper)
 
 #undef DEF
 
-double * alm_rhs(alm_t alm)
+double * alm_rhs(alm_t * alm)
 {
         return approx_rhs(alm->approx);
 }
 
-double * alm_lower(alm_t alm)
+double * alm_lower(alm_t * alm)
 {
         return approx_lower(alm->approx);
 }
 
-double * alm_upper(alm_t alm)
+double * alm_upper(alm_t * alm)
 {
         return approx_upper(alm->approx);
 }
@@ -56,13 +56,13 @@ static double * copy_double_default(const double * x, size_t n, double missing)
         return out;
 }
 
-alm_t alm_make(sparse_matrix_t * constraints,
-               size_t nrhs, const double * rhs,
-               size_t nvars, const double * linear,
-               const double * lower, const double * upper,
-               const double * lambda_lower, const double * lambda_upper)
+alm_t * alm_make(sparse_matrix_t * constraints,
+                 size_t nrhs, const double * rhs,
+                 size_t nvars, const double * linear,
+                 const double * lower, const double * upper,
+                 const double * lambda_lower, const double * lambda_upper)
 {
-        alm_t alm = calloc(1, sizeof(struct alm));
+        alm_t * alm = calloc(1, sizeof(struct alm));
         alm->nrhs = nrhs;
         alm->nvars = nvars;
 
@@ -82,7 +82,7 @@ alm_t alm_make(sparse_matrix_t * constraints,
         return alm;
 }
 
-int alm_free(alm_t alm)
+int alm_free(alm_t * alm)
 {
         if (alm == NULL) return 0;
 
@@ -103,7 +103,7 @@ static double dot(const double * x, const double * y, size_t n)
         return acc;
 }
 
-static double penalise_linear(alm_t alm, const double * lambda)
+static double penalise_linear(alm_t * alm, const double * lambda)
 {
         size_t nvars = alm->nvars;
         double * c = approx_linear(alm->approx);
@@ -118,7 +118,7 @@ static double penalise_linear(alm_t alm, const double * lambda)
         return dot(lambda, approx_rhs(alm->approx), alm->nrhs);
 }
 
-static void violation(double * OUT_viol, alm_t alm, const double * x)
+static void violation(double * OUT_viol, alm_t * alm, const double * x)
 {
         size_t nrhs = alm->nrhs;
         assert(0 == sparse_matrix_multiply(OUT_viol, nrhs,
@@ -168,7 +168,7 @@ static double norm_inf(const double * x, size_t n, size_t * OUT_i)
         return max;
 }
 
-static void project_multipliers(double * multipliers, alm_t alm)
+static void project_multipliers(double * multipliers, alm_t * alm)
 {
         size_t nrhs = alm->nrhs;
         const double * lower = alm->lambda_lower,
@@ -180,7 +180,7 @@ static void project_multipliers(double * multipliers, alm_t alm)
 }
 
 static void update_multipliers(double * multipliers,
-                               alm_t alm, const double * violation)
+                               alm_t * alm, const double * violation)
 {
         size_t nrhs = alm->nrhs;
         const double * weight = approx_weight(alm->approx);
@@ -191,7 +191,7 @@ static void update_multipliers(double * multipliers,
         project_multipliers(multipliers, alm);
 }
 
-static double update_weights(alm_t alm, const double * violation,
+static double update_weights(alm_t * alm, const double * violation,
                              double prev_norm)
 {
         size_t nrhs = alm->nrhs;
@@ -218,7 +218,7 @@ struct alm_state {
 };
 
 
-static void init_alm_state(struct alm_state * state, alm_t alm)
+static void init_alm_state(struct alm_state * state, alm_t * alm)
 {
         size_t nrhs = alm->nrhs;
         state->violation = calloc(nrhs, sizeof(double));
@@ -232,7 +232,7 @@ static void free_alm_state(struct alm_state * state)
         memset(state, 0, sizeof(struct alm_state));
 }
 
-static void update_precision(struct alm_state * state, alm_t alm, 
+static void update_precision(struct alm_state * state, alm_t * alm, 
                              const double * violation)
 {
         size_t nrhs = alm->nrhs;
@@ -243,7 +243,7 @@ static void update_precision(struct alm_state * state, alm_t alm,
         state->precision = fmax(state->precision, 1e-6);
 }
 
-static int iter(struct alm_state * state, alm_t alm,
+static int iter(struct alm_state * state, alm_t * alm,
                 double * x, double * lambda, FILE * log, size_t k,
                 double * OUT_pg, double * OUT_max_viol,
                 thread_pool_t * pool)
@@ -285,7 +285,7 @@ static int iter(struct alm_state * state, alm_t alm,
         return 0;
 }
 
-int alm_solve(alm_t alm, size_t niter, double * x, size_t nvars,
+int alm_solve(alm_t * alm, size_t niter, double * x, size_t nvars,
               double * lambda, size_t nconstraints,
               FILE * log, double * OUT_diagnosis, 
               thread_pool_t * pool)
@@ -326,7 +326,7 @@ void read_doubles(FILE * stream, double * out, size_t n)
                 assert(1 == fscanf(stream, " %lf", out+i));
 }
 
-alm_t alm_read(FILE * stream)
+alm_t * alm_read(FILE * stream)
 {
         sparse_matrix_t * m = sparse_matrix_read(stream);
         size_t nvars = sparse_matrix_ncolumns(m),
@@ -348,7 +348,7 @@ alm_t alm_read(FILE * stream)
         read_doubles(stream, lambda_lower, nrhs);
         read_doubles(stream, lambda_upper, nrhs);
 
-        alm_t alm = alm_make(m, nrhs, rhs,
+        alm_t * alm = alm_make(m, nrhs, rhs,
                              nvars, linear,
                              lower, upper,
                              lambda_lower, lambda_upper);
@@ -369,7 +369,7 @@ int main (int argc, char ** argv)
         int nthreads = 1;
         assert(argc > 1);
         FILE * instance = fopen(argv[1], "r");
-        alm_t alm = alm_read(instance);
+        alm_t * alm = alm_read(instance);
         fclose(instance);
         if (argc > 2)
                 nthreads = atoi(argv[2]);

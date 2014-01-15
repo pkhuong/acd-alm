@@ -18,7 +18,7 @@
 #include "approx/approx.h"
 #include "thread_pool/thread_pool.h"
 
-typedef struct alm * alm_t;
+typedef struct alm alm_t;
 /* Allocate an alm instance. Everything is copied, except the
  * constraint matrix, which must remain live as long as the alm
  * instance is in use.
@@ -40,31 +40,31 @@ typedef struct alm * alm_t;
  *
  * Will eventually return NULL on error.
  */
-alm_t alm_make(sparse_matrix_t * constraints,
-               size_t nrhs, const double * rhs,
-               size_t nvars, const double * linear,
-               const double * lower, const double * upper,
-               const double * lambda_lower, const double * lambda_upper);
+alm_t * alm_make(sparse_matrix_t * constraints,
+                 size_t nrhs, const double * rhs,
+                 size_t nvars, const double * linear,
+                 const double * lower, const double * upper,
+                 const double * lambda_lower, const double * lambda_upper);
 /* Releases an alm instance and its internal storage; the sparse
  * matrix is left unaffected.
  *
  * Returns 0 on success.
  */
-int alm_free(alm_t);
+int alm_free(alm_t *);
 
 /* Accessors for an alm instance. The right-hand side and linear
  * objective vectors can be modified, as can the lower/upper bound
  * vectors (both primal and dual)
  */
-sparse_matrix_t * alm_matrix(alm_t);
-size_t alm_nrhs(alm_t);
-double * alm_rhs(alm_t);
-size_t alm_nvars(alm_t);
-double * alm_linear(alm_t);
-double * alm_lower(alm_t);
-double * alm_upper(alm_t);
-double * alm_lambda_lower(alm_t);
-double * alm_lambda_upper(alm_t);
+sparse_matrix_t * alm_matrix(alm_t *);
+size_t alm_nrhs(alm_t *);
+double * alm_rhs(alm_t *);
+size_t alm_nvars(alm_t *);
+double * alm_linear(alm_t *);
+double * alm_lower(alm_t *);
+double * alm_upper(alm_t *);
+double * alm_lambda_lower(alm_t *);
+double * alm_lambda_upper(alm_t *);
 
 /* Solve an alm instance for up to niter iterations, starting from
  * primal solution x and dual multipliers lambda.
@@ -96,7 +96,7 @@ double * alm_lambda_upper(alm_t);
  *    [2-norm of projected gradient] [Lagrangian (lower) bound] \
  *    [primal objective value]
  */
-int alm_solve(alm_t, size_t niter,
+int alm_solve(alm_t *, size_t niter,
               double * x, size_t nvars,
               double * lambda, size_t nconstraints,
               FILE * log, double * OUT_diagnosis,
@@ -114,5 +114,5 @@ int alm_solve(alm_t, size_t niter,
  *
  * Will eventually return NULL on error.
  */
-alm_t alm_read(FILE * stream);
+alm_t * alm_read(FILE * stream);
 #endif

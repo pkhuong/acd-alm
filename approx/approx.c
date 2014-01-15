@@ -446,16 +446,21 @@ static void print_log(FILE * log, size_t k,
 }
 
 int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
-                 double max_pg, double max_value, double min_delta,
-                 FILE * log, size_t period, double * OUT_diagnosis,
-                 double offset, thread_pool_t * pool)
+                   double max_pg, double max_value, double min_delta,
+                   FILE * log, size_t period, double * OUT_diagnosis,
+                   double offset, thread_pool_t * pool)
 {
         assert(n == approx->nvars);
+
+        approx = approx->permuted;
+        assert(approx != NULL);
 
         struct approx_state state;
         init_state(&state, approx->nvars, approx->nrhs);
 
-        set_vector(&state.x, x, approx);
+        sparse_matrix_col_permute(approx->matrix, state.x.x, n,
+                                  x, 1);
+        project(&state.x, approx->lower, approx->upper);
         compute_violation(&state.x, approx, pool);
         value(approx, &state.x, pool);
         copy_vector(&state.z, &state.x);
@@ -552,7 +557,9 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
         print_log(log, i+1, value, ng, pg,
                   state.step_length, delta);
 
-        memcpy(x, center->x, n*sizeof(double));
+        sparse_matrix_col_permute(approx->matrix, x, n,
+                                  center->x, -1);
+
         if (OUT_diagnosis != NULL) {
                 OUT_diagnosis[0] = value;
                 OUT_diagnosis[1] = ng;

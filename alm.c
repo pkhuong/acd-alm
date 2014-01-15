@@ -62,7 +62,7 @@ alm_t * alm_make(sparse_matrix_t * constraints,
                  const double * lower, const double * upper,
                  const double * lambda_lower, const double * lambda_upper)
 {
-        alm_t * alm = calloc(1, sizeof(struct alm));
+        alm_t * alm = calloc(1, sizeof(alm_t));
         alm->nrhs = nrhs;
         alm->nvars = nvars;
 
@@ -90,7 +90,7 @@ int alm_free(alm_t * alm)
         free(alm->lambda_lower);
         free(alm->lambda_upper);
         approx_free(alm->approx);
-        memset(alm, 0, sizeof(struct alm));
+        memset(alm, 0, sizeof(alm_t));
         free(alm);
         return 0;
 }

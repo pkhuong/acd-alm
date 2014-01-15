@@ -86,7 +86,7 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                    const uint32_t * columns,
                                    const double * values)
 {
-        sparse_matrix_t * matrix = calloc(1, sizeof(struct sparse_matrix));
+        sparse_matrix_t * matrix = calloc(1, sizeof(sparse_matrix_t));
         matrix->ncolumns = ncolumns;
         matrix->nrows = nrows;
         matrix->nnz = nnz;
@@ -141,7 +141,7 @@ int sparse_matrix_free(sparse_matrix_t * matrix)
         huge_free(matrix->flat_input);
         huge_free(matrix->flat_result);
 #endif
-        memset(matrix, 0, sizeof(struct sparse_matrix));
+        memset(matrix, 0, sizeof(sparse_matrix_t));
         free(matrix);
 
         return 0;

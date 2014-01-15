@@ -111,12 +111,50 @@ static void gradient(struct vector * OUT_grad,
                 *OUT_value += dot(approx->linear, xv);
 }
 
+struct scale_violations2_info
+{
+        v2d * scaled[2];
+        const v2d * weight;
+        const v2d * viol[2];
+};
+
+static void scale_violations2_1(size_t begin, size_t end, void * thunk,
+                                unsigned id)
+{
+        (void)id;
+        struct scale_violations2_info * info = thunk;
+        v2d * scaled0 = info->scaled[0],
+                * scaled1 = info->scaled[1];
+        const v2d * weight = info->weight;
+        const v2d * viol0 = info->viol[0],
+                * viol1 = info->viol[1];
+
+        for (size_t i = begin; i < end; i++) {
+                v2d w = weight[i];
+                scaled0[i] = w*viol0[i];
+                scaled1[i] = w*viol1[i];
+        }
+}
+
 static void scale_violations2(struct vector ** OUT_scaled, approx_t * approx,
                               struct vector ** xv, double ** OUT_value,
                               thread_pool_t * pool)
 {
         (void)pool;
         size_t nrows = xv[0]->nviolation;
+        /* Fast path: no value computation */
+        if ((OUT_value[0] == NULL) && (OUT_value[1] == NULL)) {
+                struct scale_violations2_info info
+                        = {.scaled = {(v2d*)OUT_scaled[0]->x,
+                                      (v2d*)OUT_scaled[1]->x},
+                           .weight = (v2d*)approx->weight,
+                           .viol = {(v2d*)xv[0]->violation,
+                                    (v2d*)xv[1]->violation}};
+                thread_pool_for(pool, 0, (nrows+1)/2, 64,
+                                scale_violations2_1, &info);
+                return;
+        }
+
         for (size_t i = 0; i < 2; i++) {
                 v2d * scaled = (v2d*)OUT_scaled[i]->x;
                 const v2d * weight = (v2d*)approx->weight;

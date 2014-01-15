@@ -211,3 +211,12 @@ static double dot(const double * xp, const struct vector * yv)
                 acc += x[i]*y[i];
         return acc[0]+acc[1];
 }
+
+static void linterp_xy(struct vector * OUT_yv, struct vector * OUT_xv,
+                       const struct vector * zv,
+                       double theta, double next_theta,
+                       thread_pool_t * pool)
+{
+        linterp(OUT_xv, theta, OUT_xv, zv, pool, 0);
+        linterp(OUT_yv, next_theta, OUT_xv, zv, pool, 1);
+}

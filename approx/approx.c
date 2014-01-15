@@ -249,13 +249,12 @@ static void destroy_state(struct approx_state * state)
         memset(state, 0, sizeof(struct approx_state));
 }
 
+/* Assumption: y = linterp(y, theta, x, z); (only violation)
+ */
 static const struct vector *
 iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
      thread_pool_t * pool)
 {
-        linterp(&state->y, state->theta,
-                &state->x, &state->z,
-                pool, 1);
         {
                 assert(!isnan(state->z.value));
                 assert(state->z.violationp);
@@ -327,17 +326,20 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
             && (dot_diff(&state->g, &state->z, &state->zp) > 0)) {
                 /* Oscillation */
                 copy_vector(&state->x, &state->z);
+                copy_vector(&state->y, &state->z);
                 state->theta = 1;
                 return &state->x;
         }
 
         if (!state->zp.violationp)
                 compute_violation(&state->zp, approx, pool);
-        linterp(&state->x, state->theta,
-                &state->x, &state->zp,
-                pool, 0);
-        value(approx, &state->zp, pool);
-        state->theta = next_theta(state->theta);
+        {
+                double next = next_theta(state->theta);
+                linterp_xy(&state->y, &state->x, &state->zp,
+                           state->theta, next, pool);
+                value(approx, &state->zp, pool);
+                state->theta = next;
+        }
         {
                 /* swap */
                 struct vector temp = state->z;
@@ -399,6 +401,7 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
         compute_violation(&state.x, approx, pool);
         value(approx, &state.x, pool);
         copy_vector(&state.z, &state.x);
+        copy_vector(&state.y, &state.x);
         double * prev_x = huge_calloc(n, sizeof(double));
         memcpy(prev_x, state.x.x, n*sizeof(double));
 

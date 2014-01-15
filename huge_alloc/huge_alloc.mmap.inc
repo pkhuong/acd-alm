@@ -8,18 +8,21 @@ static unsigned offset = 0;
 
 void * huge_calloc(size_t n, size_t size)
 {
+        size_t page_size = sysconf(_SC_PAGE_SIZE);
         /* header + colouring */
         size_t padding = 2*sizeof(size_t) + 64*((offset++)%8); 
         padding = (padding+63ul)&(~63ul); /* round up to 64 bytes */
-        assert((padding < (size_t)sysconf(_SC_PAGE_SIZE))
+        assert((padding < page_size)
                 && "_SC_PAGE_SIZE is too tiny (<< 1k?!)");
         size_t bytes = n*size;
         if (bytes/size != n) return NULL;
         if (bytes+padding+16 <= bytes) return NULL;
         bytes += padding+16; /* 16 byte slop for SIMD */
-        void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
-                          MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
-                          -1, 0);
+        void * ret = MAP_FAILED;
+        if (bytes >= 4*page_size)
+                ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
+                           MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
+                           -1, 0);
         if (ret == MAP_FAILED)
                 ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
                            MAP_ANONYMOUS|MAP_PRIVATE,

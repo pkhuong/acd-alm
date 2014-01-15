@@ -179,29 +179,23 @@ static int approx_update_step_size(approx_t * approx)
 
 int approx_update(approx_t * approx)
 {
-        assert(!sparse_matrix_row_permute(approx->permuted->matrix,
-                                          approx->permuted->rhs,
-                                          approx->nrhs,
-                                          approx->rhs, 1));
-        assert(!sparse_matrix_row_permute(approx->permuted->matrix,
-                                          approx->permuted->weight,
-                                          approx->nrhs,
-                                          approx->weight, 1));
-        assert(!sparse_matrix_col_permute(approx->permuted->matrix,
-                                          approx->permuted->linear,
-                                          approx->nvars,
-                                          approx->linear, 1));
-        assert(!sparse_matrix_col_permute(approx->permuted->matrix,
-                                          approx->permuted->lower,
-                                          approx->nvars,
-                                          approx->lower, 1));
-        assert(!sparse_matrix_col_permute(approx->permuted->matrix,
-                                          approx->permuted->upper,
-                                          approx->nvars,
-                                          approx->upper, 1));
-
         assert(!approx_update_step_size(approx));
-        assert(!approx_update_step_size(approx->permuted));
+
+        if (approx->permuted) {
+#define PERMUTE(FIELD, LENGTH)                                          \
+                assert(!sparse_matrix_row_permute(approx->permuted->matrix, \
+                                                  approx->permuted->FIELD, \
+                                                  approx->LENGTH,       \
+                                                  approx->FIELD, 1))    \
+
+                PERMUTE(rhs, nrhs);
+                PERMUTE(weight, nrhs);
+                PERMUTE(linear, nvars);
+                PERMUTE(lower, nvars);
+                PERMUTE(upper, nvars);
+#undef PERMUTE
+                assert(!approx_update_step_size(approx->permuted));
+        }
 
         return 0;
 }

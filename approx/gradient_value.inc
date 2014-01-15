@@ -178,6 +178,27 @@ static void scale_violations2(struct vector ** OUT_scaled, approx_t * approx,
 
 }
 
+struct increment_linear_term_info
+{
+        v2d * grad[2];
+        const v2d * linear;
+};
+
+static void increment_linear_term_1 (size_t begin, size_t end, void * thunk,
+                                     unsigned id)
+{
+        (void)id;
+        struct increment_linear_term_info * info = thunk;
+        v2d * g0 = info->grad[0],
+                * g1 = info->grad[1];
+        const v2d * linear = info->linear;
+        for (size_t i = begin; i < end; i++) {
+                v2d li = linear[i];
+                g0[i] += li;
+                g1[i] += li;
+        }
+}
+
 static void gradient2(struct vector ** OUT_grad,
                       approx_t * approx, struct vector ** OUT_scaled,
                       struct vector ** xv, double ** OUT_value,
@@ -213,12 +234,16 @@ static void gradient2(struct vector ** OUT_grad,
                                                      1, pool));
         }
 
+        {
+                struct increment_linear_term_info info
+                        = {.grad = {(v2d*)OUT_grad[0]->x,
+                                    (v2d*)OUT_grad[1]->x},
+                           .linear = (v2d*)approx->linear};
+                thread_pool_for(pool, 0, (nvars+1)/2, 64,
+                                increment_linear_term_1, &info);
+        }
+
         for (size_t i = 0; i < 2; i++) {
-                v2d * grad = (v2d*)OUT_grad[i]->x;
-                const v2d * linear = (v2d*)approx->linear;
-                size_t n = (nvars+1)/2;
-                for (size_t i = 0; i < n; i++)
-                        grad[i] += linear[i];
                 if (OUT_value[i] != NULL)
                         *OUT_value[i] += dot(approx->linear, xv[i]);
         }

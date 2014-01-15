@@ -111,6 +111,35 @@ static void gradient(struct vector * OUT_grad,
                 *OUT_value += dot(approx->linear, xv);
 }
 
+static void scale_violations2(struct vector ** OUT_scaled, approx_t * approx,
+                              struct vector ** xv, double ** OUT_value,
+                              thread_pool_t * pool)
+{
+        (void)pool;
+        size_t nrows = xv[0]->nviolation;
+        for (size_t i = 0; i < 2; i++) {
+                v2d * scaled = (v2d*)OUT_scaled[i]->x;
+                const v2d * weight = (v2d*)approx->weight;
+                v2d * viol = (v2d*)xv[i]->violation;
+                size_t n = (nrows+1)/2;
+                if (OUT_value[i] == NULL) {
+                        for (size_t i = 0; i < n; i++)
+                                scaled[i] = weight[i]*viol[i];
+                } else {
+                        v2d value = {0,0};
+                        for (size_t i = 0; i < n; i++) {
+                                v2d v = viol[i];
+                                v2d w = weight[i];
+                                v2d s = v*w;
+                                value += s*v;
+                                scaled[i] = s;
+                        }
+                        *OUT_value[i] = .5*(value[0]+value[1]);
+                }
+        }
+
+}
+
 static void gradient2(struct vector ** OUT_grad,
                       approx_t * approx, struct vector ** OUT_scaled,
                       struct vector ** xv, double ** OUT_value,
@@ -134,26 +163,7 @@ static void gradient2(struct vector ** OUT_grad,
                         compute_violation(xv[i], approx, pool);
         }
 
-        for (size_t i = 0; i < 2; i++) {
-                v2d * scaled = (v2d*)OUT_scaled[i]->x;
-                const v2d * weight = (v2d*)approx->weight;
-                v2d * viol = (v2d*)xv[i]->violation;
-                size_t n = (nrows+1)/2;
-                if (OUT_value[i] == NULL) {
-                        for (size_t i = 0; i < n; i++)
-                                scaled[i] = weight[i]*viol[i];
-                } else {
-                        v2d value = {0,0};
-                        for (size_t i = 0; i < n; i++) {
-                                v2d v = viol[i];
-                                v2d w = weight[i];
-                                v2d s = v*w;
-                                value += s*v;
-                                scaled[i] = s;
-                        }
-                        *OUT_value[i] = .5*(value[0]+value[1]);
-                }
-        }
+        scale_violations2(OUT_scaled, approx, xv, OUT_value, pool);
 
         {
                 double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};

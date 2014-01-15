@@ -22,6 +22,9 @@ static int sparse_matrix_csr(sparse_matrix_t * matrix, struct csr * csr,
         uint32_t * rows = matrix->rows;
         double * values = matrix->values;
 
+        const uint32_t * row_permutation = matrix->row_permutation.ridx,
+                * col_permutation = matrix->col_permutation.ridx;
+
         const size_t nnz = matrix->nnz,
                 ncolumns = matrix->ncolumns,
                 nrows = matrix->nrows;
@@ -34,6 +37,8 @@ static int sparse_matrix_csr(sparse_matrix_t * matrix, struct csr * csr,
                         row = rows[i];
                 assert(column < ncolumns);
                 assert(row < nrows);
+                column = col_permutation[column];
+                row = row_permutation[row];
                 if (transpose)
                         SWAP(row, column);
                 entries[i] = (struct matrix_entry)

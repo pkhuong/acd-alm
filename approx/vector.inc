@@ -212,11 +212,98 @@ static double dot(const double * xp, const struct vector * yv)
         return acc[0]+acc[1];
 }
 
+/* OUT_x <- scale*OUT_x + theta*z
+ * OUT_x_viol <- scale*OUT_x_viol + theta*z_viol
+ * OUT_y_viol <- next_scale*OUT_x_viol + next_theta*z_viol
+ */
+struct linterp_xy_state
+{
+        v2d scale2, theta2;
+        v2d next_scale2, next_theta2;
+        v2d * OUT_y_viol, * OUT_x, * OUT_x_viol;
+        const v2d * z, * z_viol;
+        size_t n, nviol;
+};
+
+static void linterp_xy_1(size_t begin, size_t end, void * info, unsigned id)
+{
+        (void)id;
+        struct linterp_xy_state * state = info;
+        v2d scale2 = state->scale2, theta2 = state->theta2,
+                next_scale2 = state->next_scale2,
+                next_theta2 = state->next_theta2;
+        v2d * y_viol = state->OUT_y_viol,
+                * x = state->OUT_x,
+                * x_viol = state->OUT_x_viol;
+        const v2d * z = state->z, * z_viol = state->z_viol;
+        size_t n = state->n, nviol = state->nviol;
+        size_t max = end;
+        if (max > n) max = n;
+        if (max > nviol) max = nviol;
+
+        size_t i = begin;
+        if (i < max) {
+                for (; i < max; i++) {
+                        v2d zi = z[i], xi = x[i];
+                        v2d zvi = z_viol[i], xvi = x_viol[i];
+                        xi = scale2*xi+theta2*zi;
+                        xvi = scale2*xvi+theta2*zvi;
+                        y_viol[i] = next_scale2*xvi+next_theta2*zvi;
+                        x[i] = xi;
+                        x_viol[i] = xvi;
+                }
+        }
+
+        if (i == end) return;
+        if (i < n) {
+                assert(i >= nviol);
+                for (; i < end; i++) {
+                        v2d zi = z[i], xi = x[i];
+                        xi = scale2*xi+theta2*zi;
+                        x[i] = xi;
+                }
+        } else if (i < nviol) {
+                assert(i >= n);
+                for (; i < end; i++) {
+                        v2d zvi = z_viol[i], xvi = x_viol[i];
+                        xvi = scale2*xvi+theta2*zvi;
+                        y_viol[i] = next_scale2*xvi+next_theta2*zvi;
+                        x_viol[i] = xvi;
+                }
+        }
+}
+
 static void linterp_xy(struct vector * OUT_yv, struct vector * OUT_xv,
                        const struct vector * zv,
                        double theta, double next_theta,
                        thread_pool_t * pool)
 {
-        linterp(OUT_xv, theta, OUT_xv, zv, pool, 0);
-        linterp(OUT_yv, next_theta, OUT_xv, zv, pool, 1);
+        assert(theta >= 0);
+        assert(theta <= 1);
+        assert(next_theta >= 0);
+        assert(next_theta <= 1);
+
+        size_t nvars = OUT_yv->n;
+        assert(OUT_xv->n == nvars);
+        assert(zv->n == nvars);
+
+        size_t nviolation = OUT_yv->nviolation;
+        assert(nviolation && OUT_xv->violationp && zv->violationp);
+        assert(OUT_xv->nviolation == nviolation);
+        assert(zv->nviolation == nviolation);
+
+        double scale = 1-theta;
+        double next_scale = 1-next_theta;
+        struct linterp_xy_state state
+                = {.scale2 = {scale, scale}, .theta2 = {theta, theta},
+                   .next_scale2 = {next_scale, next_scale},
+                   .next_theta2 = {next_theta, next_theta},
+                   .OUT_y_viol = (v2d *)OUT_yv->violation,
+                   .OUT_x = (v2d *)OUT_xv->x,
+                   .OUT_x_viol = (v2d*)OUT_xv->violation,
+                   .z = (v2d *)zv->x, .z_viol = (v2d *)zv->violation,
+                   .n = (nvars+1)/2, .nviol = (nviolation+1)/2};
+        size_t n = (nvars > nviolation)?nvars:nviolation;
+        thread_pool_for(pool, 0, (n+1)/2, 64,
+                        linterp_xy_1, &state);
 }

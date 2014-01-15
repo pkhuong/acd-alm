@@ -11,8 +11,12 @@ void * huge_calloc(size_t n, size_t size)
         /* header + colouring */
         size_t padding = 2*sizeof(size_t) + 64*((offset++)%8); 
         padding = (padding+63ul)&(~63ul); /* round up to 64 bytes */
-        assert(padding < (size_t)sysconf(_SC_PAGE_SIZE));
-        size_t bytes = n*size+padding+16; /* 16 byte slop for SIMD */
+        assert((padding < (size_t)sysconf(_SC_PAGE_SIZE))
+                && "_SC_PAGE_SIZE is too tiny (<< 1k?!)");
+        size_t bytes = n*size;
+        if (bytes/size != n) return NULL;
+        if (bytes+padding+16 <= bytes) return NULL;
+        bytes += padding+16; /* 16 byte slop for SIMD */
         void * ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
                           MAP_ANONYMOUS|MAP_HUGETLB|MAP_PRIVATE,
                           -1, 0);
@@ -20,7 +24,7 @@ void * huge_calloc(size_t n, size_t size)
                 ret = mmap(NULL, bytes, PROT_READ|PROT_WRITE,
                            MAP_ANONYMOUS|MAP_PRIVATE,
                            -1, 0);
-        assert(ret != MAP_FAILED);
+        if (ret == MAP_FAILED) return NULL;
         {
                 size_t * header = ret;
                 header[0] = bytes;
@@ -35,7 +39,8 @@ void huge_free(void * ptr)
         if (ptr == NULL) return;
         size_t * header = (size_t*)((uintptr_t)ptr & (~mask));
         size_t bytes = header[0], padding = header[1];
-        assert((char*)ptr == (char*)header+padding);
+        assert(((char*)ptr == (char*)header+padding)
+                && "heap corruption or bad pointer in huge_free");
 
         munmap(header, bytes);
 }

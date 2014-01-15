@@ -257,6 +257,8 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 &state->x, &state->z,
                 pool, 1);
         {
+                assert(state->z.violationp);
+                assert(state->y.violationp);
                 /* FIXME: state->g not always needed! */
                 struct vector * g[2] = {&state->g, &state->g2};
                 struct vector * violation[2] = {&state->violation,
@@ -264,7 +266,6 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 struct vector * x[2]= {&state->z, &state->y};
                 double * values[2] = {NULL, NULL};
                 gradient2(g, approx, violation, x, values, pool);
-                state->value = value(approx, &state->z, pool);
         }
 
         int descent_achieved = 0;
@@ -314,6 +315,8 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                         }
                 }
         }
+
+        state->value = value(approx, &state->z, pool);
 
         if (OUT_pg != NULL)
                 *OUT_pg = project_gradient_norm(&state->g, &state->z,

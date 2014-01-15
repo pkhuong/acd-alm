@@ -8,62 +8,7 @@
 #include <xmmintrin.h>
 #include "../huge_alloc/huge_alloc.h"
 #include "../thread_pool/thread_pool.h"
-
-#ifdef USE_OSKI
-# include <oski/oski.h>
-#endif
-
-struct csr
-{
-        size_t nrows;
-        uint32_t * rows_indices;
-        uint32_t * columns;
-        double * values;
-};
-
-struct sparse_matrix
-{
-        size_t ncolumns, nrows, nnz;
-        uint32_t * rows, * columns;
-        double * values;
-        struct csr matrix;
-        struct csr transpose;
-#ifdef USE_OSKI
-        oski_matrix_t oski_matrix;
-        double * flat_input;
-        double * flat_result;
-#endif
-};
-
-#define SWAP(X, Y) do {                         \
-                __typeof__(X) temp = (X);       \
-                (X) = (Y);                      \
-                (Y) = temp;                     \
-        } while (0)
-
-#ifndef PREFETCH_DISTANCE
-# define PREFETCH_DISTANCE 0
-#endif
-
-#define PREFETCH_TYPE _MM_HINT_NTA
-
-struct matrix_entry {
-        uint32_t column;
-        uint32_t row;
-        double value;
-        uint64_t swizzled;
-};
-
-static int compare_matrix_entries(const void * xp, const void * yp)
-{
-        const struct matrix_entry * x = xp,
-                * y = yp;
-        if (x->swizzled < y->swizzled)
-                return -1;
-        if (x->swizzled > y->swizzled)
-                return 1;
-        return 0;
-}
+#include "spmv_internal.h"
 
 /* FIXME: actually break these up in compilation units. */
 
@@ -81,10 +26,11 @@ void sparse_matrix_init()
 }
 
 sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
-                                   size_t nnz,
-                                   const uint32_t * rows,
-                                   const uint32_t * columns,
-                                   const double * values)
+                                     size_t nnz,
+                                     const uint32_t * rows,
+                                     const uint32_t * columns,
+                                     const double * values,
+                                     int permute)
 {
         sparse_matrix_t * matrix = calloc(1, sizeof(sparse_matrix_t));
         matrix->ncolumns = ncolumns;
@@ -123,7 +69,17 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
         matrix->flat_input = huge_calloc(n*2, sizeof(double));
         matrix->flat_result = huge_calloc(n*2, sizeof(double));
 #endif
-
+        if (permute) {
+                sparse_permutation_init(&matrix->row_permutation,
+                                        matrix, 1);
+                sparse_permutation_init(&matrix->col_permutation,
+                                        matrix, 0);
+        } else {
+                sparse_permutation_identity(&matrix->row_permutation,
+                                            matrix->nrows);
+                sparse_permutation_identity(&matrix->col_permutation,
+                                            matrix->ncolumns);
+        }
         return matrix;
 }
 
@@ -141,6 +97,8 @@ int sparse_matrix_free(sparse_matrix_t * matrix)
         huge_free(matrix->flat_input);
         huge_free(matrix->flat_result);
 #endif
+        sparse_permutation_clear(&matrix->row_permutation);
+        sparse_permutation_clear(&matrix->col_permutation);
         memset(matrix, 0, sizeof(sparse_matrix_t));
         free(matrix);
 
@@ -161,6 +119,24 @@ DEF(const uint32_t *, columns)
 DEF(const double *, values)
 
 #undef DEF
+
+int sparse_matrix_row_permute(sparse_matrix_t * matrix,
+                              double * dest, size_t n,
+                              const double * src, int direction)
+{
+        return sparse_permute_vector(dest, n,
+                                     &matrix->row_permutation,
+                                     src, direction);
+}
+
+int sparse_matrix_col_permute(sparse_matrix_t * matrix,
+                              double * dest, size_t n,
+                              const double * src, int direction)
+{
+        return sparse_permute_vector(dest, n,
+                                     &matrix->col_permutation,
+                                     src, direction);
+}
 
 int sparse_matrix_multiply(double * OUT_y, size_t ny,
                            const sparse_matrix_t * a,
@@ -240,8 +216,6 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
         return 0;
 }
 
-#undef SWAP
-
 sparse_matrix_t * sparse_matrix_read(FILE * stream)
 {
         size_t nrows, ncolumns, nnz;
@@ -258,8 +232,9 @@ sparse_matrix_t * sparse_matrix_read(FILE * stream)
                                    rows+i, columns+i, values+i));
 
         sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows,
-                                               nnz,
-                                               rows, columns, values);
+                                                 nnz,
+                                                 rows, columns, values,
+                                                 0);
         free(rows);
         free(columns);
         free(values);
@@ -308,7 +283,8 @@ sparse_matrix_t * sparsify_matrix(const double * matrix,
         }
 
         sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows, nnz,
-                                               rows, columns, values);
+                                                 rows, columns, values,
+                                                 0);
         free(rows);
         free(columns);
         free(values);

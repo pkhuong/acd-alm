@@ -17,10 +17,11 @@ void sparse_matrix_init();
  * can be in any order, as long as they never repeat.  Will eventually
  * return NULL on error. */
 sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
-                                   size_t nnz,
-                                   const uint32_t * rows,
-                                   const uint32_t * columns,
-                                   const double * values);
+                                     size_t nnz,
+                                     const uint32_t * rows,
+                                     const uint32_t * columns,
+                                     const double * values,
+                                     int permute);
 /* Free a sparse matrix; NULL are ignored.  Will eventually return
  * non-zero on error. */
 int sparse_matrix_free(sparse_matrix_t *);
@@ -34,6 +35,11 @@ size_t sparse_matrix_nnz(sparse_matrix_t *);
 const uint32_t * sparse_matrix_rows(sparse_matrix_t *);
 const uint32_t * sparse_matrix_columns(sparse_matrix_t *);
 const double * sparse_matrix_values(sparse_matrix_t *);
+
+int sparse_matrix_row_permute(sparse_matrix_t *, double * dest, size_t n,
+                              const double * src, int direction);
+int sparse_matrix_col_permute(sparse_matrix_t *, double * dest, size_t n,
+                              const double * src, int direction);
 
 /* Actual multiplication. OUT_y <- op(A) x.
  *  op is identity if transpose = 0, transpose otherwise.

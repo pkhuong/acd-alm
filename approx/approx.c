@@ -531,7 +531,8 @@ sparse_matrix_t * random_matrix(size_t nrows, size_t ncolumns)
         }
 
         sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows, nnz,
-                                               rows, columns, values);
+                                                 rows, columns, values,
+                                                 0);
         free(values);
         free(rows);
         free(columns);

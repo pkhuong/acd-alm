@@ -32,9 +32,6 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                      const double * values,
                                      int permute)
 {
-#if defined(USE_OSKI) || defined(SWIZZLED_MULT)
-        assert(!permute);
-#endif
         sparse_matrix_t * matrix = calloc(1, sizeof(sparse_matrix_t));
         matrix->ncolumns = ncolumns;
         matrix->nrows = nrows;
@@ -55,6 +52,12 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                         matrix, 1);
                 sparse_permutation_init(&matrix->col_permutation,
                                         matrix, 0);
+                const uint32_t * row_ridx = matrix->row_permutation.ridx,
+                        * col_ridx = matrix->col_permutation.ridx;
+                for (size_t i = 0; i < nnz; i++) {
+                        matrix->rows[i] = row_ridx[matrix->rows[i]];
+                        matrix->columns[i] = col_ridx[matrix->columns[i]];
+                }
         } else {
                 sparse_permutation_identity(&matrix->row_permutation,
                                             matrix->nrows);
@@ -85,6 +88,14 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
         matrix->flat_result = huge_calloc(n*2, sizeof(double));
 #endif
         return matrix;
+}
+
+sparse_matrix_t * sparse_matrix_copy(const sparse_matrix_t * src,
+                                     int permute)
+{
+        return sparse_matrix_make(src->ncolumns, src->nrows, src->nnz,
+                                  src->rows, src->columns, src->values,
+                                  permute);
 }
 
 int sparse_matrix_free(sparse_matrix_t * matrix)
@@ -220,7 +231,7 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
         return 0;
 }
 
-sparse_matrix_t * sparse_matrix_read(FILE * stream)
+sparse_matrix_t * sparse_matrix_read(FILE * stream, int permute)
 {
         size_t nrows, ncolumns, nnz;
         assert(stream != NULL);
@@ -238,7 +249,7 @@ sparse_matrix_t * sparse_matrix_read(FILE * stream)
         sparse_matrix_t * m = sparse_matrix_make(ncolumns, nrows,
                                                  nnz,
                                                  rows, columns, values,
-                                                 0);
+                                                 permute);
         free(rows);
         free(columns);
         free(values);

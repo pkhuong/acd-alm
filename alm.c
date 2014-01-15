@@ -328,7 +328,7 @@ void read_doubles(FILE * stream, double * out, size_t n)
 
 alm_t * alm_read(FILE * stream)
 {
-        sparse_matrix_t * m = sparse_matrix_read(stream);
+        sparse_matrix_t * m = sparse_matrix_read(stream, 0);
         size_t nvars = sparse_matrix_ncolumns(m),
                 nrhs = sparse_matrix_nrows(m);
         double * rhs = calloc(nrhs, sizeof(double));

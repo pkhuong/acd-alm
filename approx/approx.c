@@ -81,7 +81,8 @@ approx_t * approx_make(sparse_matrix_t * constraints,
                                           weight,
                                           nvars, linear, lower, upper);
 
-        approx->permuted = approx_make_1(constraints,
+        approx->permuted = approx_make_1(sparse_matrix_copy(constraints,
+                                                            1),
                                          nrhs, rhs,
                                          weight,
                                          nvars, linear, lower, upper);
@@ -111,7 +112,11 @@ int approx_free(approx_t * approx)
 {
         if (approx == NULL) return 0;
 
-        approx_free(approx->permuted);
+        if (approx->permuted != NULL) {
+                sparse_matrix_t * permuted = approx->permuted->matrix;
+                approx_free(approx->permuted);
+                sparse_matrix_free(permuted);
+        }
 
         huge_free(approx->rhs);
         huge_free(approx->weight);
@@ -174,36 +179,30 @@ static int approx_update_step_size(approx_t * approx)
 
 int approx_update(approx_t * approx)
 {
-        assert(!approx_update_step_size(approx));
-
-        assert(!sparse_matrix_row_permute(approx->matrix,
+        assert(!sparse_matrix_row_permute(approx->permuted->matrix,
                                           approx->permuted->rhs,
                                           approx->nrhs,
                                           approx->rhs, 1));
-        assert(!sparse_matrix_row_permute(approx->matrix,
+        assert(!sparse_matrix_row_permute(approx->permuted->matrix,
                                           approx->permuted->weight,
                                           approx->nrhs,
                                           approx->weight, 1));
-        assert(!sparse_matrix_col_permute(approx->matrix,
+        assert(!sparse_matrix_col_permute(approx->permuted->matrix,
                                           approx->permuted->linear,
                                           approx->nvars,
                                           approx->linear, 1));
-        assert(!sparse_matrix_col_permute(approx->matrix,
+        assert(!sparse_matrix_col_permute(approx->permuted->matrix,
                                           approx->permuted->lower,
                                           approx->nvars,
                                           approx->lower, 1));
-        assert(!sparse_matrix_col_permute(approx->matrix,
+        assert(!sparse_matrix_col_permute(approx->permuted->matrix,
                                           approx->permuted->upper,
                                           approx->nvars,
                                           approx->upper, 1));
-        assert(!sparse_matrix_col_permute(approx->matrix,
-                                          approx->permuted->v,
-                                          approx->nvars,
-                                          approx->v, 1));        
-        assert(!sparse_matrix_col_permute(approx->matrix,
-                                          approx->permuted->inv_v,
-                                          approx->nvars,
-                                          approx->inv_v, 1));
+
+        assert(!approx_update_step_size(approx));
+        assert(!approx_update_step_size(approx->permuted));
+
         return 0;
 }
 
@@ -446,14 +445,14 @@ static void print_log(FILE * log, size_t k,
 }
 
 int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
-                   double max_pg, double max_value, double min_delta,
-                   FILE * log, size_t period, double * OUT_diagnosis,
-                   double offset, thread_pool_t * pool)
+                 double max_pg, double max_value, double min_delta,
+                 FILE * log, size_t period, double * OUT_diagnosis,
+                 double offset, thread_pool_t * pool)
 {
         assert(n == approx->nvars);
 
-        approx = approx->permuted;
-        assert(approx != NULL);
+        if (approx->permuted)
+                approx = approx->permuted;
 
         struct approx_state state;
         init_state(&state, approx->nvars, approx->nrhs);

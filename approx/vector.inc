@@ -43,6 +43,7 @@ static void copy_vector(struct vector * x, const struct vector * y)
 static void project(struct vector * xv,
                     const double * lower, const double * upper);
 
+__attribute__((unused))
 static void set_vector(struct vector * x, const double * src,
                        approx_t * approx)
 {

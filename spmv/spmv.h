@@ -22,6 +22,8 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                      const uint32_t * columns,
                                      const double * values,
                                      int permute);
+sparse_matrix_t * sparse_matrix_copy(const sparse_matrix_t * matrix,
+                                     int permute);
 /* Free a sparse matrix; NULL are ignored.  Will eventually return
  * non-zero on error. */
 int sparse_matrix_free(sparse_matrix_t *);
@@ -78,5 +80,5 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
  *
  * Returns NULL on failure.
  */
-sparse_matrix_t * sparse_matrix_read(FILE * stream);
+sparse_matrix_t * sparse_matrix_read(FILE * stream, int permute);
 #endif

@@ -85,11 +85,12 @@ int sparse_permute_vector(double * dest, size_t n,
                           const sparse_permutation_t * permutation,
                           const double * src, int direction)
 {
-        (void)dest;
-        (void)n;
-        (void)permutation;
-        (void)src;
-        (void)direction;
-        assert(0);
+        if (n != permutation->n) return 1;
+        const uint32_t * idx = ((direction >= 0)
+                                ? permutation->idx
+                                : permutation->ridx);
+        for (size_t i = 0; i < n; i++)
+                dest[i] = src[idx[i]];
+
         return 0;
 }

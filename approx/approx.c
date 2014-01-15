@@ -421,11 +421,12 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                         if (!restart) {
                                 restart = 1;
                                 if (log != NULL)
-                                        fprintf(log, "\t\t");
+                                        fprintf(log, "\t\t ");
                         }
-                        if (log != NULL)
+                        if (log != NULL) {
                                 fprintf(log, "R");
-                        fflush(log);
+                                fflush(log);
+                        }
                 }
 
                 value = state.value+offset;

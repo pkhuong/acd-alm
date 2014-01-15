@@ -255,7 +255,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
 {
         linterp(&state->y, state->theta,
                 &state->x, &state->z,
-                pool);
+                pool, 1);
         {
                 /* FIXME: state->g not always needed! */
                 struct vector * g[2] = {&state->g, &state->g2};
@@ -331,7 +331,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 compute_violation(&state->zp, approx, pool);
         linterp(&state->x, state->theta,
                 &state->x, &state->zp,
-                pool);
+                pool, 0);
         state->theta = next_theta(state->theta);
         {
                 /* swap */

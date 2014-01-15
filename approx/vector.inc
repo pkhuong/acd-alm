@@ -168,7 +168,7 @@ static void linterp_single(thread_pool_t * pool,
 /* y <- (1-theta)x + theta z */
 static void linterp(struct vector * OUT_yv, double theta,
                     const struct vector * xv, const struct vector * zv,
-                    thread_pool_t * pool)
+                    thread_pool_t * pool, int violation_only)
 {
         assert(theta >= 0);
         assert(theta <= 1);
@@ -181,12 +181,19 @@ static void linterp(struct vector * OUT_yv, double theta,
         if (nviolation && xv->violationp && zv->violationp) {
                 assert(xv->nviolation == nviolation);
                 assert(zv->nviolation == nviolation);
-                linterp_both(pool, scale, theta,
-                             OUT_yv->x, nvars, xv->x, zv->x,
-                             OUT_yv->violation, nviolation,
-                             xv->violation, zv->violation);
+                if (violation_only) {
+                        linterp_single(pool, scale, theta,
+                                       OUT_yv->violation, nviolation,
+                                       xv->violation, zv->violation);
+                } else {
+                        linterp_both(pool, scale, theta,
+                                     OUT_yv->x, nvars, xv->x, zv->x,
+                                     OUT_yv->violation, nviolation,
+                                     xv->violation, zv->violation);
+                }
                 OUT_yv->violationp = 1;
         } else {
+                assert(!violation_only);
                 linterp_single(pool, scale, theta,
                                OUT_yv->x, nvars, xv->x, zv->x);
                 OUT_yv->violationp = 0;

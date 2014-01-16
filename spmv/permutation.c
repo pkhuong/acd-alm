@@ -53,8 +53,11 @@ void sparse_permutation_init(sparse_permutation_t * destination,
         {
                 const uint32_t * src = row?matrix->rows:matrix->columns;
                 size_t nnz = matrix->nnz;
-                for (size_t i = 0; i < nnz; i++)
-                        pairs[src[i]].count++;
+                for (size_t i = 0; i < nnz; i++) {
+                        uint32_t c = src[i];
+                        assert(c < n);
+                        pairs[c].count++;
+                }
         }
 
         qsort(pairs, n, sizeof(struct count_pair), compare_count_pair);

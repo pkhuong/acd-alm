@@ -207,6 +207,9 @@ gradient2_long_step(approx_t * approx, thread_pool_t * pool,
                     const double * inv_v, const double * vs)
 {
         struct gradient2_long_step_state state;
+        double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};
+        const double * x[2] = {zy[0]->violation,
+                               zy[1]->violation};
 
         size_t n;
 
@@ -226,10 +229,6 @@ gradient2_long_step(approx_t * approx, thread_pool_t * pool,
 #endif
                                 compute_violation(zy[i], approx, pool);
                 }
-
-                double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};
-                const double * x[2] = {zy[0]->violation,
-                                       zy[1]->violation};
                 
                 state.gradient2 = 
                         (struct gradient2_state)
@@ -253,8 +252,7 @@ gradient2_long_step(approx_t * approx, thread_pool_t * pool,
                         * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
                 assert(length >= 1);
                 double inv_theta = (length-1e-6)/theta;
-                state.step
-                        =
+                state.step =
                         (struct long_step_state)
                         { .itheta = {inv_theta, inv_theta},
                           .theta2 = {theta/length, theta/length},

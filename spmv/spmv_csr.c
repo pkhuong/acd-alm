@@ -248,4 +248,3 @@ void csr_mult2_subrange(size_t from, size_t end, void * info,
         (void)id;
         csr_mult2_subrange_1(from, end, info, NULL, NULL);
 }
-

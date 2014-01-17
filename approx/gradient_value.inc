@@ -1,3 +1,36 @@
+#include "../spmv/spmv_internal.h"
+
+struct compute_violation_state
+{
+        struct csr_mult_subrange_info mult;
+        const v2d * rhs, * weight;
+        v2d * viol;
+};
+
+static double compute_violation_1(size_t begin, size_t end,
+                                  void * info, unsigned id)
+{
+        (void)id;
+        struct compute_violation_state * state = info;
+        csr_mult_subrange_1(begin, end, &state->mult,
+                            &begin, &end);
+        assert(0 == begin%2);
+        assert((end == state->mult.csr->nrows) || (0 == end%2));
+
+        const v2d * rhs = state->rhs,
+                * weight = state->weight;
+        v2d * viol = state->viol;
+        v2d value = {0, 0};
+        size_t n = (end+1)/2;
+        for (size_t i = begin/2; i < n; i++) {
+                v2d v = viol[i]-rhs[i];
+                v2d scaled = weight[i]*v;
+                viol[i] = scaled;
+                value += scaled*v;
+        }
+        return value[0]+value[1];
+}
+
 static void compute_violation(struct vector * xv, approx_t * approx,
                               thread_pool_t * pool)
 {
@@ -7,21 +40,20 @@ static void compute_violation(struct vector * xv, approx_t * approx,
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
 
-        assert(0 == sparse_matrix_multiply(xv->violation, nrows,
-                                           approx->matrix, xv->x, nvars, 0,
-                                           pool));
-        const v2d * rhs = (v2d*)approx->rhs,
-                * weight = (v2d*)approx->weight;
-        v2d * viol = (v2d*)xv->violation;
-        v2d value = {0, 0};
-        size_t n = (nrows+1)/2;
-        for (size_t i = 0; i < n; i++) {
-                v2d v = viol[i]-rhs[i];
-                v2d scaled = weight[i]*v;
-                viol[i] = scaled;
-                value += scaled*v;
-        }
-        xv->quad_value = .5*(value[0]+value[1]);
+        struct compute_violation_state state
+                = {.mult = {.out = xv->violation,
+                            .csr = &approx->matrix->matrix,
+                            .x = xv->x},
+                   .rhs = (v2d*)approx->rhs,
+                   .weight = (v2d*)approx->weight,
+                   .viol = (v2d*)xv->violation};
+
+        xv->quad_value = .5*thread_pool_map_reduce(pool,
+                                                   0, nrows, 8,
+                                                   compute_violation_1,
+                                                   &state,
+                                                   THREAD_POOL_REDUCE_SUM,
+                                                   0);
         xv->violationp = 1;
 }
 

@@ -133,3 +133,17 @@ long_step(struct vector * zpv, double theta, double length,
         zpv->quad_value = nan("");
         return estimate;
 }
+
+static double
+gradient2_long_step(approx_t * approx, thread_pool_t * pool,
+                    struct vector ** OUT_grad, struct vector ** zy,
+                    struct vector * zpv, double theta, double length,
+                    const double * lower, const double * upper,
+                    const double * inv_v, const double * vs)
+{
+        gradient2(OUT_grad, approx, zy, pool);
+        return long_step(zpv, theta, length,
+                         OUT_grad[1], zy[0],
+                         lower, upper, inv_v, vs,
+                         pool);
+}

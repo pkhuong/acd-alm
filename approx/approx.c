@@ -304,9 +304,48 @@ static void destroy_state(struct approx_state * state)
 
 /* Assumption: y = linterp(y, theta, x, z); (only violation)
  */
-static const struct vector *
-iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
-     thread_pool_t * pool)
+static int try_long_step(approx_t * approx, struct approx_state * state,
+                         double step_length, thread_pool_t * pool)
+{
+        int safe = (step_length <= 1+1e-6);
+        if (safe) step_length = 1;
+
+        double expected_improvement;
+        {
+                assert(!isnan(state->z.value));
+                assert(state->z.violationp);
+                assert(state->y.violationp);
+                struct vector * g[2] = {&state->g, &state->g2};
+                struct vector * x[2]= {&state->z, &state->y};
+                expected_improvement
+                        = gradient2_long_step(approx, pool,
+                                              g, x,
+                                              &state->zp,
+                                              state->theta, step_length,
+                                              approx->lower, approx->upper,
+                                              approx->inv_v, approx->v);
+        }
+        double initial = compute_value(approx, &state->z, pool);
+        double now = compute_value(approx, &state->zp, pool);
+        assert(expected_improvement <= 0);
+
+        if (now <= initial+expected_improvement) {
+                state->step_length = step_length*1.01;
+                return 1;
+        }
+
+        state->step_length = .9*step_length;
+        if (!safe)
+                step(&state->zp, state->theta,
+                     &state->g2, &state->z,
+                     approx->lower, approx->upper,
+                     approx->inv_v);
+
+        return 0;
+}
+
+static int short_step(approx_t * approx, struct approx_state * state,
+                      double step_length, thread_pool_t * pool)
 {
         {
                 assert(!isnan(state->z.value));
@@ -318,52 +357,33 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 gradient2(g, approx, x, pool);
         }
 
-        int descent_achieved = 0;
-        for (int i = 0; i < 2; i++) {
+        step(&state->zp, state->theta,
+             &state->g2, &state->z,
+             approx->lower, approx->upper,
+             approx->inv_v);
+
+        state->step_length = step_length * 1.01;
+        if (state->step_length > 1)
+                state->step_length = 1+1e-6;
+
+        return 0;
+}
+
+static const struct vector *
+iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
+     thread_pool_t * pool)
+{
+        int descent_achieved;
+        {
                 double step_length = state->step_length;
 #ifdef STATIC_STEP
                 step_length = state->step_length = 1;
 #endif
-                if (i || (step_length <= 1)) {
-                        step(&state->zp, state->theta,
-                             &state->g2, &state->z,
-                             approx->lower, approx->upper,
-                             approx->inv_v);
-                        if (i == 0) {
-                                state->step_length *= 1.01;
-                                if (state->step_length > 1)
-                                        state->step_length = 1+1e-6;
-                        }
-                        break;
-                } else {
-                        /* Special code to tell when the step is
-                         * definitely OK. If so, perform a normal
-                         * step, but update step_length.
-                         */
-                        int safe = (step_length <= 1+1e-6);
-                        if (safe) step_length = 1;
-                        double expected_improvement
-                                = long_step(&state->zp,
-                                            state->theta, step_length,
-                                            &state->g2, &state->z,
-                                            approx->lower, approx->upper,
-                                            approx->inv_v, approx->v,
-                                            pool);
-                        double initial = compute_value(approx, &state->z,
-                                                       pool);
-                        double now = compute_value(approx, &state->zp,
-                                                   pool);
-                        assert(expected_improvement <= 0);
-                        if (now > initial+expected_improvement) {
-                                state->step_length = .9*step_length;
-                                /* Bad guess, but safe step anyway */
-                                if (safe) break;
-                        } else {
-                                state->step_length = step_length*1.01;
-                                descent_achieved = 1;
-                                break;
-                        }
-                }
+                if (step_length <= 1)
+                        descent_achieved = short_step(approx, state,
+                                                      step_length, pool);
+                else    descent_achieved = try_long_step(approx, state,
+                                                         step_length, pool);
         }
 
         state->value = compute_value(approx, &state->z, pool);

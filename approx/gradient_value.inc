@@ -81,12 +81,14 @@ static double compute_value(approx_t * approx, struct vector * xv,
                 if (!isnan(value)) return value;
         }
 
+        double linear = dot(approx->linear, xv, pool);
+
 #ifndef NO_CACHING
         if (isnan(xv->quad_value))
 #endif
                 compute_violation(xv, approx, pool);
 
-        return xv->value = xv->quad_value+dot(approx->linear, xv, pool);
+        return xv->value = xv->quad_value+linear;
 }
 
 struct gradient_state

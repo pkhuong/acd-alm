@@ -268,7 +268,6 @@ struct approx_state
         double theta;
 
         struct vector g, g2;
-        struct vector violation, violation2;
         double value;
 
         double step_length;
@@ -286,8 +285,6 @@ static void init_state(struct approx_state * state,
 
         init_vector(&state->g, nvars, 0);
         init_vector(&state->g2, nvars, 0);
-        init_vector(&state->violation, nrows, 0);
-        init_vector(&state->violation2, nrows, 0);
         state->value = HUGE_VAL;
 
         state->step_length = 1;
@@ -301,8 +298,6 @@ static void destroy_state(struct approx_state * state)
         destroy_vector(&state->x);
         destroy_vector(&state->g);
         destroy_vector(&state->g2);
-        destroy_vector(&state->violation);
-        destroy_vector(&state->violation2);
 
         memset(state, 0, sizeof(struct approx_state));
 }
@@ -319,11 +314,8 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 assert(state->y.violationp);
                 /* FIXME: state->g not always needed! */
                 struct vector * g[2] = {&state->g, &state->g2};
-                struct vector * violation[2] = {&state->violation,
-                                                &state->violation2};
                 struct vector * x[2]= {&state->z, &state->y};
-                double * values[2] = {NULL, NULL};
-                gradient2(g, approx, violation, x, values, pool);
+                gradient2(g, approx, x, pool);
         }
 
         int descent_achieved = 0;

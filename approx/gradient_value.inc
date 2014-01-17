@@ -96,10 +96,8 @@ static void increment_linear_term_1 (size_t begin, size_t end, void * thunk,
         }
 }
 
-static void gradient2(struct vector ** OUT_grad,
-                      approx_t * approx, struct vector ** OUT_scaled,
-                      struct vector ** xv, double ** OUT_value,
-                      thread_pool_t * pool)
+static void gradient2(struct vector ** OUT_grad, approx_t * approx,
+                      struct vector ** xv, thread_pool_t * pool)
 {
         size_t nvars = OUT_grad[0]->n,
                 nrows = xv[0]->nviolation;
@@ -107,10 +105,8 @@ static void gradient2(struct vector ** OUT_grad,
         assert(xv[1]->nviolation == nrows);
         assert(nvars == approx->nvars);
         assert(nrows == approx->nrhs);
-        for (size_t i = 0; i < 2; i++) {
-                assert(nrows == OUT_scaled[i]->n);
+        for (size_t i = 0; i < 2; i++)
                 assert(nvars == xv[i]->n);
-        }
 
         for (size_t i = 0; i < 2; i++) {
 #ifndef NO_CACHING
@@ -136,10 +132,5 @@ static void gradient2(struct vector ** OUT_grad,
                            .linear = (v2d*)approx->linear};
                 thread_pool_for(pool, 0, (nvars+1)/2, 64,
                                 increment_linear_term_1, &info);
-        }
-
-        for (size_t i = 0; i < 2; i++) {
-                if (OUT_value[i] != NULL)
-                        *OUT_value[i] += dot(approx->linear, xv[i]);
         }
 }

@@ -1,9 +1,10 @@
 struct vector {
         double * x;
-        double * violation; /* Ax-b */
+        double * violation; /* weight (Ax-b) */
         size_t n;
         size_t nviolation;
         int violationp;
+        double quad_value; /* 1/2 weight(Ax-b)^2, valid iff !nan */
         double value;
 };
 
@@ -19,6 +20,7 @@ static void init_vector(struct vector * x, size_t n, size_t nviolation)
                 x->nviolation = 0;
         }
         x->violationp = 0;
+        x->quad_value = nan("");
         x->value = nan("");
 }
 
@@ -37,6 +39,7 @@ static void copy_vector(struct vector * x, const struct vector * y)
         } else {
                 x->violationp = 0;
         }
+        x->quad_value = y->quad_value;
         x->value = y->value;
 }
 
@@ -200,6 +203,7 @@ static void linterp(struct vector * OUT_yv, double theta,
                 OUT_yv->violationp = 0;
         }
         OUT_yv->value = nan("");
+        OUT_yv->quad_value = nan("");
 }
 
 static double dot(const double * xp, const struct vector * yv)
@@ -310,4 +314,6 @@ static void linterp_xy(struct vector * OUT_yv, struct vector * OUT_xv,
                         linterp_xy_1, &state);
         OUT_yv->value = nan("");
         OUT_xv->value = nan("");
+        OUT_yv->quad_value = nan("");
+        OUT_xv->quad_value = nan("");
 }

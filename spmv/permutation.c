@@ -78,6 +78,8 @@ void sparse_permutation_init(sparse_permutation_t * destination,
         qsort(pairs, n, sizeof(struct count_pair), compare_count_pair);
 #ifdef PERMUTATION_SHUFFLE
         fisher_yates(pairs, n/8, 8*sizeof(struct count_pair));
+#else
+        (void)fisher_yates;
 #endif
         destination->idx = calloc(n, sizeof(uint32_t));
         destination->ridx = calloc(n, sizeof(uint32_t));

@@ -59,7 +59,7 @@ static void compute_violation(struct vector * xv, approx_t * approx,
                    .viol = (v2d*)xv->violation};
 
         xv->quad_value = .5*thread_pool_map_reduce(pool,
-                                                   0, nrows, 8,
+                                                   0, nrows, 16,
                                                    compute_violation_1,
                                                    &state,
                                                    THREAD_POOL_REDUCE_SUM,
@@ -133,7 +133,7 @@ static void gradient(struct vector * OUT_grad, approx_t * approx,
                    .linear = (v2d*)approx->linear,
                    .grad = (v2d*)OUT_grad->x};
 
-        thread_pool_for(pool, 0, nvars, 8, gradient_1, &state);
+        thread_pool_for(pool, 0, nvars, 16, gradient_1, &state);
 }
 
 struct gradient2_state
@@ -200,5 +200,5 @@ static void gradient2(struct vector ** OUT_grad, approx_t * approx,
                    .linear = (v2d*)approx->linear,
                    .grad = {(v2d*)grad[0], (v2d*)grad[1]}};
 
-        thread_pool_for(pool, 0, nvars, 8, gradient2_1, &state);
+        thread_pool_for(pool, 0, nvars, 16, gradient2_1, &state);
 }

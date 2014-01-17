@@ -54,6 +54,7 @@ static void step(struct vector * zpv, double theta,
         assert(max(max_z[0], max_z[1]) < HUGE_VAL);
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
+        zpv->quad_value = nan("");
 }
 
 struct long_step_state
@@ -129,5 +130,6 @@ long_step(struct vector * zpv, double theta, double length,
                                          0);
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
+        zpv->quad_value = nan("");
         return estimate;
 }

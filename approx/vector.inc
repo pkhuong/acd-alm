@@ -308,4 +308,6 @@ static void linterp_xy(struct vector * OUT_yv, struct vector * OUT_xv,
         size_t n = (nvars > nviolation)?nvars:nviolation;
         thread_pool_for(pool, 0, (n+1)/2, 64,
                         linterp_xy_1, &state);
+        OUT_yv->value = nan("");
+        OUT_xv->value = nan("");
 }

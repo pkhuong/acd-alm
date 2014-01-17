@@ -12,7 +12,6 @@
 
 /* FIXME: actually break these up in compilation units. */
 
-#include "spmv.csr.inc"
 #include "spmv.swizzle.inc"
 #ifdef USE_OSKI
 # include "spmv.oski.inc"
@@ -65,8 +64,8 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
                                             matrix->ncolumns);
         }
 
-        sparse_matrix_csr(matrix, &matrix->matrix, 0);
-        sparse_matrix_csr(matrix, &matrix->transpose, 1);
+        csr_from_sparse_matrix(matrix, &matrix->matrix, 0);
+        csr_from_sparse_matrix(matrix, &matrix->transpose, 1);
         sparse_matrix_swizzle(matrix);
 
 #ifdef USE_OSKI
@@ -105,8 +104,8 @@ int sparse_matrix_free(sparse_matrix_t * matrix)
         huge_free(matrix->rows);
         huge_free(matrix->columns);
         huge_free(matrix->values);
-        free_csr(&matrix->matrix);
-        free_csr(&matrix->transpose);
+        csr_clear(&matrix->matrix);
+        csr_clear(&matrix->transpose);
 #ifdef USE_OSKI
         oski_DestroyMat(matrix->oski_matrix);
         huge_free(matrix->flat_input);
@@ -170,7 +169,6 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
 
         assert(ny == nrows);
         assert(nx == ncolumns);
-        (void)mult_csr;
         (void)mult;
 #ifdef SWIZZLED_MULT
         memset(OUT_y, 0, sizeof(double)*ny);
@@ -179,12 +177,12 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
         mult_oski(OUT_y, ny, a->oski_matrix, x, nx, transpose);
 #else
         {
-                struct mult_csr_subrange_info info
+                struct csr_mult_subrange_info info
                         = {.out = OUT_y,
                            .csr = transpose?&a->transpose:&a->matrix,
                            .x = x};
                 thread_pool_for(pool, 0, info.csr->nrows, 16,
-                                mult_csr_subrange, &info);
+                                csr_mult_subrange, &info);
         }
 #endif
         return 0;
@@ -207,7 +205,6 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
 
         assert(ny == nrows);
         assert(nx == ncolumns);
-        (void)mult_csr2;
         (void)mult2;
 #ifdef SWIZZLED_MULT
         memset(OUT_y[0], 0, sizeof(double)*ny);
@@ -220,12 +217,12 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                    transpose);
 #else
         {
-                struct mult_csr2_subrange_info info
+                struct csr_mult2_subrange_info info
                         = {.out = OUT_y,
                            .csr = transpose?&a->transpose:&a->matrix,
                            .x = x};
                 thread_pool_for(pool, 0, info.csr->nrows, 16,
-                                mult_csr2_subrange, &info);
+                                csr_mult2_subrange, &info);
         }
 #endif
         return 0;

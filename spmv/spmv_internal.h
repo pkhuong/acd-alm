@@ -1,5 +1,6 @@
 #ifndef SPMV_INTERNAL_H
 #define SPMV_INTERNAL_H
+#include "spmv_csr.h"
 #ifdef USE_OSKI
 # include <oski/oski.h>
 #endif
@@ -19,14 +20,6 @@ typedef struct sparse_permutation
         uint32_t * idx, * ridx;
         size_t n;
 } sparse_permutation_t;
-
-struct csr
-{
-        size_t nrows;
-        uint32_t * rows_indices;
-        uint32_t * columns;
-        double * values;
-};
 
 struct sparse_matrix
 {
@@ -66,7 +59,7 @@ compare_matrix_entries(const void * xp, const void * yp)
 void sparse_permutation_identity(sparse_permutation_t * destination,
                                  size_t n);
 void sparse_permutation_init(sparse_permutation_t * destination,
-                             const sparse_matrix_t * matrix,
+                             const struct sparse_matrix * matrix,
                              int row); /* otherwise, column */
 void sparse_permutation_clear(sparse_permutation_t *);
 

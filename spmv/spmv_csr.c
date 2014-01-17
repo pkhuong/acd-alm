@@ -1,4 +1,13 @@
-static int init_csr(struct csr * csr, size_t nrows, size_t nnz)
+#include <stdlib.h>
+#include <assert.h>
+#include <string.h>
+#include <strings.h>
+#include "../huge_alloc/huge_alloc.h"
+#include "../thread_pool/thread_pool.h"
+#include "spmv_internal.h"
+
+
+static int csr_init(struct csr * csr, size_t nrows, size_t nnz)
 {
         csr->nrows = nrows;
         csr->rows_indices = calloc(nrows+1, sizeof(uint32_t));
@@ -7,7 +16,7 @@ static int init_csr(struct csr * csr, size_t nrows, size_t nnz)
         return 0;
 }
 
-static void free_csr(struct csr * csr)
+void csr_clear(struct csr * csr)
 {
         free(csr->rows_indices);
         huge_free(csr->columns);
@@ -15,8 +24,8 @@ static void free_csr(struct csr * csr)
         memset(csr, 0, sizeof(struct csr));
 }
 
-static int sparse_matrix_csr(sparse_matrix_t * matrix, struct csr * csr,
-                             int transpose)
+int csr_from_sparse_matrix(struct sparse_matrix * matrix, struct csr * csr,
+                           int transpose)
 {
         uint32_t * columns = matrix->columns;
         uint32_t * rows = matrix->rows;
@@ -48,7 +57,7 @@ static int sparse_matrix_csr(sparse_matrix_t * matrix, struct csr * csr,
               nnz, sizeof(struct matrix_entry),
               compare_matrix_entries);
 
-        init_csr(csr, transpose?ncolumns:nrows, nnz);
+        csr_init(csr, transpose?ncolumns:nrows, nnz);
 
         for (size_t i = 0; i < nnz; i++) {
                 struct matrix_entry * entry = entries+i;
@@ -119,18 +128,11 @@ static void mult_csr(double * out, struct csr * csr, const double * x)
         }
 }
 
-struct mult_csr_subrange_info
-{
-        double * out;
-        const struct csr * csr;
-        const double * x;
-};
-
-static void mult_csr_subrange(size_t from, size_t end, void * info, 
-                              unsigned id)
+void csr_mult_subrange(size_t from, size_t end, void * info, 
+                       unsigned id)
 {
         (void)id;
-        struct mult_csr_subrange_info * info_struct = info;
+        struct csr_mult_subrange_info * info_struct = info;
         double * out = info_struct->out;
         const struct csr * csr = info_struct->csr;
         const double * x = info_struct->x;
@@ -211,18 +213,11 @@ static void mult_csr2(double ** out, struct csr * csr, const double ** x)
         }
 }
 
-struct mult_csr2_subrange_info
-{
-        double ** out;
-        const struct csr * csr;
-        const double ** x;
-};
-
-static void mult_csr2_subrange(size_t from, size_t end, void * info, 
-                               unsigned id)
+void csr_mult2_subrange(size_t from, size_t end, void * info, 
+                        unsigned id)
 {
         (void)id;
-        struct mult_csr2_subrange_info * info_struct = info;
+        struct csr_mult2_subrange_info * info_struct = info;
         double ** out = info_struct->out;
         const struct csr * csr = info_struct->csr;
         const double ** x = info_struct->x;
@@ -233,3 +228,4 @@ static void mult_csr2_subrange(size_t from, size_t end, void * info,
         subcsr.rows_indices = csr->rows_indices+from;
         mult_csr2(out2, &subcsr, x);
 }
+

@@ -37,6 +37,21 @@ static int compare_count_pair(const void * x, const void * y)
         return 0;
 }
 
+static void fisher_yates(void * data, size_t nmemb, size_t size)
+{
+        void * temp = calloc(size, 1);
+        for (size_t i = 0, offset = 0; i < nmemb; i++, offset += size) {
+                size_t j = (1.0*random()/RAND_MAX)*(nmemb-i);
+                j += i;
+                void * current = (char*)data+offset,
+                        * pick = (char*)data+(j*size);
+                memcpy(temp, current, size);
+                memcpy(current, pick, size);
+                memcpy(pick, temp, size);
+        }
+        free(temp);
+}
+
 void sparse_permutation_init(sparse_permutation_t * destination,
                              const sparse_matrix_t * matrix,
                              int row)
@@ -61,6 +76,8 @@ void sparse_permutation_init(sparse_permutation_t * destination,
         }
 
         qsort(pairs, n, sizeof(struct count_pair), compare_count_pair);
+
+        fisher_yates(pairs, n/8, 8*sizeof(struct count_pair));
 
         destination->idx = calloc(n, sizeof(uint32_t));
         destination->ridx = calloc(n, sizeof(uint32_t));

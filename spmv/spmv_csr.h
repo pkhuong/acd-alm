@@ -22,6 +22,10 @@ struct csr_mult_subrange_info
         const double * x;
 };
 
+void csr_mult_subrange_1(size_t from, size_t end,
+                         struct csr_mult_subrange_info * info, 
+                         size_t * OUT_begin, size_t * OUT_end);
+
 void csr_mult_subrange(size_t from, size_t end, void * info, 
                        unsigned id);
 
@@ -31,6 +35,10 @@ struct csr_mult2_subrange_info
         const struct csr * csr;
         const double ** x;
 };
+
+void csr_mult2_subrange_1(size_t from, size_t end,
+                          struct csr_mult2_subrange_info * info, 
+                          size_t * OUT_begin, size_t * OUT_end);
 
 void csr_mult2_subrange(size_t from, size_t end, void * info, 
                         unsigned id);

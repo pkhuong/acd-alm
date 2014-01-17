@@ -7,7 +7,6 @@
 #include "../thread_pool/thread_pool.h"
 #include "spmv_internal.h"
 
-
 static int csr_init(struct csr * csr, size_t nrows, size_t nnz)
 {
         csr->nrows = nrows;
@@ -129,11 +128,10 @@ static void mult_csr(double * out, struct csr * csr, const double * x)
         }
 }
 
-void csr_mult_subrange(size_t from, size_t end, void * info, 
-                       unsigned id)
+void csr_mult_subrange_1(size_t from, size_t end,
+                         struct csr_mult_subrange_info * info_struct, 
+                         size_t * OUT_begin, size_t * OUT_end)
 {
-        (void)id;
-        struct csr_mult_subrange_info * info_struct = info;
         double * out = info_struct->out;
         const struct csr * csr = info_struct->csr;
         const double * x = info_struct->x;
@@ -142,6 +140,17 @@ void csr_mult_subrange(size_t from, size_t end, void * info,
         subcsr.nrows = end-from;
         subcsr.rows_indices = csr->rows_indices+from;
         mult_csr(out+from, &subcsr, x);
+        if (OUT_begin != NULL)
+                *OUT_begin = from;
+        if (OUT_end != NULL)
+                *OUT_end = end;
+}
+
+void csr_mult_subrange(size_t from, size_t end, void * info, 
+                       unsigned id)
+{
+        (void)id;
+        csr_mult_subrange_1(from, end, info, NULL, NULL);
 }
 
 static void mult_csr2(double ** out, struct csr * csr, const double ** x)
@@ -214,11 +223,10 @@ static void mult_csr2(double ** out, struct csr * csr, const double ** x)
         }
 }
 
-void csr_mult2_subrange(size_t from, size_t end, void * info, 
-                        unsigned id)
+void csr_mult2_subrange_1(size_t from, size_t end,
+                          struct csr_mult2_subrange_info * info_struct,
+                          size_t * OUT_begin, size_t * OUT_end)
 {
-        (void)id;
-        struct csr_mult2_subrange_info * info_struct = info;
         double ** out = info_struct->out;
         const struct csr * csr = info_struct->csr;
         const double ** x = info_struct->x;
@@ -228,5 +236,16 @@ void csr_mult2_subrange(size_t from, size_t end, void * info,
         subcsr.nrows = end-from;
         subcsr.rows_indices = csr->rows_indices+from;
         mult_csr2(out2, &subcsr, x);
+        if (OUT_begin != NULL)
+                *OUT_begin = from;
+        if (OUT_end != NULL)
+                *OUT_end = end;
+}
+
+void csr_mult2_subrange(size_t from, size_t end, void * info, 
+                        unsigned id)
+{
+        (void)id;
+        csr_mult2_subrange_1(from, end, info, NULL, NULL);
 }
 

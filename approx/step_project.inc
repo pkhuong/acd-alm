@@ -97,7 +97,7 @@ long_step_1(size_t from, size_t end, void * thunk, unsigned id)
  * f(x) ~= f(z) + g'x + \sum_i (theta v_i)/2 (x-z)^2_i
  *   min in z_i - 1/(theta v_i) g_i
  */
-static double
+static double __attribute__((unused))
 long_step(struct vector * zpv, double theta, double length,
           const struct vector * gv, const struct vector * zv,
           const double * restrict lower, const double * restrict upper,

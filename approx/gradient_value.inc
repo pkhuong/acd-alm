@@ -137,18 +137,27 @@ static void gradient2_1(size_t begin, size_t end, void * info, unsigned id)
 {
         (void)id;
         struct gradient2_state * state = info;
-        csr_mult2_subrange_1(begin, end, &state->mult,
-                             &begin, &end);
-        assert(0 == begin%2);
-        assert((end == state->mult.csr->nrows) || (0 == end%2));
-
         const v2d * linear = state->linear;
         v2d * g0 = state->grad[0], * g1 = state->grad[1];
-        size_t n = (end+1)/2;
-        for (size_t i = begin/2; i < n; i++) {
-                v2d li = linear[i];
-                g0[i] += li;
-                g1[i] += li;
+
+        int last = 0;
+        for (size_t begin2 = begin; !last; begin2 += 8) {
+                size_t end2 = begin2+8;
+                if ((end2 < begin2) || (end <= end2)) {
+                        end2 = end;
+                        last = 1;
+                }
+                csr_mult2_subrange_1(begin2, end2, &state->mult,
+                                     &begin2, &end2);
+                assert(0 == begin2%2);
+                assert((end2 == state->mult.csr->nrows) || (0 == end2%2));
+
+                size_t n = (end2+1)/2;
+                for (size_t i = begin2/2; i < n; i++) {
+                        v2d li = linear[i];
+                        g0[i] += li;
+                        g1[i] += li;
+                }
         }
 }
 

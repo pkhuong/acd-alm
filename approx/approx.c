@@ -190,6 +190,13 @@ int approx_update(approx_t * approx)
 
                 PERMUTE(rhs, nrhs);
                 PERMUTE(weight, nrhs);
+#undef PERMUTE
+#define PERMUTE(FIELD, LENGTH)                                          \
+                assert(!sparse_matrix_col_permute(approx->permuted->matrix, \
+                                                  approx->permuted->FIELD, \
+                                                  approx->LENGTH,       \
+                                                  approx->FIELD, 1))    \
+
                 PERMUTE(linear, nvars);
                 PERMUTE(lower, nvars);
                 PERMUTE(upper, nvars);

@@ -126,21 +126,26 @@ static void gradient(struct vector * OUT_grad, approx_t * approx,
         thread_pool_for(pool, 0, nvars, 8, gradient_1, &state);
 }
 
-struct increment_linear_term_info
+struct gradient2_state
 {
-        v2d * grad[2];
+        struct csr_mult2_subrange_info mult;
         const v2d * linear;
+        v2d * grad[2];
 };
 
-static void increment_linear_term_1 (size_t begin, size_t end, void * thunk,
-                                     unsigned id)
+static void gradient2_1(size_t begin, size_t end, void * info, unsigned id)
 {
         (void)id;
-        struct increment_linear_term_info * info = thunk;
-        v2d * g0 = info->grad[0],
-                * g1 = info->grad[1];
-        const v2d * linear = info->linear;
-        for (size_t i = begin; i < end; i++) {
+        struct gradient2_state * state = info;
+        csr_mult2_subrange_1(begin, end, &state->mult,
+                             &begin, &end);
+        assert(0 == begin%2);
+        assert((end == state->mult.csr->nrows) || (0 == end%2));
+
+        const v2d * linear = state->linear;
+        v2d * g0 = state->grad[0], * g1 = state->grad[1];
+        size_t n = (end+1)/2;
+        for (size_t i = begin/2; i < n; i++) {
                 v2d li = linear[i];
                 g0[i] += li;
                 g1[i] += li;
@@ -166,22 +171,14 @@ static void gradient2(struct vector ** OUT_grad, approx_t * approx,
                         compute_violation(xv[i], approx, pool);
         }
 
-        {
-                double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};
-                const double * scaled[2] = {xv[0]->violation,
-                                            xv[1]->violation};
-                assert(0 == sparse_matrix_multiply_2(grad, nvars,
-                                                     approx->matrix,
-                                                     scaled, nrows,
-                                                     1, pool));
-        }
+        double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};
+        const double * x[2] = {xv[0]->violation, xv[1]->violation};
+        struct gradient2_state state
+                = {.mult = {.out = grad,
+                            .csr = &approx->matrix->transpose,
+                            .x = x},
+                   .linear = (v2d*)approx->linear,
+                   .grad = {(v2d*)grad[0], (v2d*)grad[1]}};
 
-        {
-                struct increment_linear_term_info info
-                        = {.grad = {(v2d*)OUT_grad[0]->x,
-                                    (v2d*)OUT_grad[1]->x},
-                           .linear = (v2d*)approx->linear};
-                thread_pool_for(pool, 0, (nvars+1)/2, 64,
-                                increment_linear_term_1, &info);
-        }
+        thread_pool_for(pool, 0, nvars, 8, gradient2_1, &state);
 }

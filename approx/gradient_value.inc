@@ -12,21 +12,31 @@ static double compute_violation_1(size_t begin, size_t end,
 {
         (void)id;
         struct compute_violation_state * state = info;
-        csr_mult_subrange_1(begin, end, &state->mult,
-                            &begin, &end);
-        assert(0 == begin%2);
-        assert((end == state->mult.csr->nrows) || (0 == end%2));
-
         const v2d * rhs = state->rhs,
                 * weight = state->weight;
         v2d * viol = state->viol;
         v2d value = {0, 0};
-        size_t n = (end+1)/2;
-        for (size_t i = begin/2; i < n; i++) {
-                v2d v = viol[i]-rhs[i];
-                v2d scaled = weight[i]*v;
-                viol[i] = scaled;
-                value += scaled*v;
+
+        int last = 0;
+        while (!last) {
+                size_t begin2 = begin;
+                size_t end2 = begin += 512;
+                if ((end2 < begin2) || (end <= end2)) {
+                        end2 = end;
+                        last = 1;
+                }
+                csr_mult_subrange_1(begin2, end2, &state->mult,
+                                    &begin2, &end2);
+                assert(0 == begin2%2);
+                assert((end2 == state->mult.csr->nrows) || (0 == end2%2));
+
+                size_t n = (end2+1)/2;
+                for (size_t i = begin2/2; i < n; i++) {
+                        v2d v = viol[i]-rhs[i];
+                        v2d scaled = weight[i]*v;
+                        viol[i] = scaled;
+                        value += scaled*v;
+                }
         }
         return value[0]+value[1];
 }

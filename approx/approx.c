@@ -357,10 +357,10 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                                             approx->lower, approx->upper,
                                             approx->inv_v, approx->v,
                                             pool);
-                        double initial = value(approx, &state->z,
-                                               pool);
-                        double now = value(approx, &state->zp,
-                                           pool);
+                        double initial = compute_value(approx, &state->z,
+                                                       pool);
+                        double now = compute_value(approx, &state->zp,
+                                                   pool);
                         assert(expected_improvement <= 0);
                         if (now > initial+expected_improvement) {
                                 state->step_length = .9*step_length;
@@ -374,7 +374,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 }
         }
 
-        state->value = value(approx, &state->z, pool);
+        state->value = compute_value(approx, &state->z, pool);
 
         if (OUT_pg != NULL)
                 *OUT_pg = project_gradient_norm(&state->g, &state->z,
@@ -395,7 +395,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 double next = next_theta(state->theta);
                 linterp_xy(&state->y, &state->x, &state->zp,
                            state->theta, next, pool);
-                value(approx, &state->zp, pool);
+                compute_value(approx, &state->zp, pool);
                 state->theta = next;
         }
         {
@@ -462,7 +462,7 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                                   x, 1);
         project(&state.x, approx->lower, approx->upper);
         compute_violation(&state.x, approx, pool);
-        value(approx, &state.x, pool);
+        compute_value(approx, &state.x, pool);
         copy_vector(&state.z, &state.x);
         copy_vector(&state.y, &state.x);
         double * prev_x = huge_calloc(n, sizeof(double));
@@ -508,8 +508,8 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
 
                 if ((i+1)%100 == 0) {
                         center = &state.x;
-                        gradient(&state.g, approx, &state.violation,
-                                 &state.x, &value, pool);
+                        value = compute_value(approx, &state.x, pool);
+                        gradient(&state.g, approx, &state.x, pool);
                         pg = project_gradient_norm(&state.g, &state.x,
                                                    approx->lower,
                                                    approx->upper);
@@ -546,8 +546,8 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
         }
 
         delta = diff(prev_x, center->x, n)/(norm_2(center)+1e-10);
-        gradient(&state.g, approx, &state.violation,
-                 (struct vector *)center, &value, pool);
+        value = compute_value(approx, (struct vector*)center, pool);
+        gradient(&state.g, approx, (struct vector *)center, pool);
         value += offset;
         ng = norm_2(&state.g);
         /* We're about to free center, anyway */

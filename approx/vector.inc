@@ -206,15 +206,31 @@ static void linterp(struct vector * OUT_yv, double theta,
         OUT_yv->quad_value = nan("");
 }
 
-static double dot(const double * xp, const struct vector * yv)
+struct dot_state
 {
-        size_t n = (yv->n+1)/2;
-        const v2d * x = (v2d*)xp;
-        const v2d * y = (v2d*)yv->x;
-        v2d acc = {0,0};
-        for (size_t i = 0; i < n; i++)
+        const v2d * x, * y;
+};
+
+static double dot_1(size_t begin, size_t end, void * info, unsigned id)
+{
+        (void)id;
+        struct dot_state * state = info;
+        const v2d * x = state->x, * y = state->y;
+        v2d acc = {0, 0};
+        for (size_t i = begin; i < end; i++)
                 acc += x[i]*y[i];
         return acc[0]+acc[1];
+}
+
+static double dot(const double * xp, const struct vector * yv,
+                  thread_pool_t * pool)
+{
+        struct dot_state state
+                = {.x = (v2d*)xp, .y = (v2d*)yv->x};
+        size_t n = (yv->n+1)/2;
+        return thread_pool_map_reduce(pool, 0, n, 512,
+                                      dot_1, &state,
+                                      THREAD_POOL_REDUCE_SUM, 0);
 }
 
 /* OUT_x <- scale*OUT_x + theta*z

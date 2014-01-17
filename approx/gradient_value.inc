@@ -86,7 +86,7 @@ static double compute_value(approx_t * approx, struct vector * xv,
 #endif
                 compute_violation(xv, approx, pool);
 
-        return xv->value = xv->quad_value+dot(approx->linear, xv);
+        return xv->value = xv->quad_value+dot(approx->linear, xv, pool);
 }
 
 struct gradient_state

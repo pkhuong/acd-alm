@@ -141,8 +141,9 @@ static void gradient2_1(size_t begin, size_t end, void * info, unsigned id)
         v2d * g0 = state->grad[0], * g1 = state->grad[1];
 
         int last = 0;
-        for (size_t begin2 = begin; !last; begin2 += 512) {
-                size_t end2 = begin2+512;
+        while (!last) {
+                size_t begin2 = begin;
+                size_t end2 = begin += 512;
                 if ((end2 < begin2) || (end <= end2)) {
                         end2 = end;
                         last = 1;

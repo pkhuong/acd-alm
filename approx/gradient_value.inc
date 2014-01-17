@@ -79,6 +79,29 @@ static double compute_value(approx_t * approx, struct vector * xv,
         return xv->value = xv->quad_value+dot(approx->linear, xv);
 }
 
+struct gradient_state
+{
+        struct csr_mult_subrange_info mult;
+        const v2d * linear;
+        v2d * grad;
+};
+
+static void gradient_1(size_t begin, size_t end, void * info, unsigned id)
+{
+        (void)id;
+        struct gradient_state * state = info;
+        csr_mult_subrange_1(begin, end, &state->mult,
+                            &begin, &end);
+        assert(0 == begin%2);
+        assert((end == state->mult.csr->nrows) || (0 == end%2));
+
+        const v2d * linear = state->linear;
+        v2d * grad = state->grad;
+        size_t n = (end+1)/2;
+        for (size_t i = begin/2; i < n; i++)
+                grad[i] += linear[i];
+}
+
 static void gradient(struct vector * OUT_grad, approx_t * approx,
                      struct vector * xv, thread_pool_t * pool)
 {
@@ -93,18 +116,14 @@ static void gradient(struct vector * OUT_grad, approx_t * approx,
 #endif
                 compute_violation(xv, approx, pool);
 
-        assert(0 == sparse_matrix_multiply(OUT_grad->x, nvars,
-                                           approx->matrix,
-                                           xv->violation, nrows,
-                                           1, pool));
+        struct gradient_state state
+                = {.mult = {.out = OUT_grad->x,
+                            .csr = &approx->matrix->transpose,
+                            .x = xv->violation},
+                   .linear = (v2d*)approx->linear,
+                   .grad = (v2d*)OUT_grad->x};
 
-        {
-                v2d * grad = (v2d*)OUT_grad->x;
-                const v2d * linear = (v2d*)approx->linear;
-                size_t n = (nvars+1)/2;
-                for (size_t i = 0; i < n; i++)
-                        grad[i] += linear[i];
-        }
+        thread_pool_for(pool, 0, nvars, 8, gradient_1, &state);
 }
 
 struct increment_linear_term_info

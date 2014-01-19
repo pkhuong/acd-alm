@@ -2,7 +2,7 @@
 
 struct compute_violation_state
 {
-        struct csr_mult_subrange_info mult;
+        struct block_mult_subrange_info mult;
         const v2d * rhs, * weight;
         v2d * viol;
 };
@@ -25,10 +25,10 @@ static double compute_violation_1(size_t begin, size_t end,
                         end2 = end;
                         last = 1;
                 }
-                csr_mult_subrange_1(begin2, end2, &state->mult,
-                                    &begin2, &end2);
+                block_mult_subrange_1(begin2, end2, &state->mult,
+                                      &begin2, &end2);
                 assert(0 == begin2%2);
-                assert((end2 == state->mult.csr->nrows) || (0 == end2%2));
+                assert((end2 == state->mult.matrix->nrows) || (0 == end2%2));
 
                 size_t n = (end2+1)/2;
                 for (size_t i = begin2/2; i < n; i++) {
@@ -52,14 +52,14 @@ static void compute_violation(struct vector * xv, approx_t * approx,
 
         struct compute_violation_state state
                 = {.mult = {.out = xv->violation,
-                            .csr = &approx->matrix->matrix,
+                            .matrix = &approx->matrix->block,
                             .x = xv->x},
                    .rhs = (v2d*)approx->rhs,
                    .weight = (v2d*)approx->weight,
                    .viol = (v2d*)xv->violation};
 
         xv->quad_value = .5*thread_pool_map_reduce(pool,
-                                                   0, nrows, 16,
+                                                   0, approx->matrix->block.nblocks, 8,
                                                    compute_violation_1,
                                                    &state,
                                                    THREAD_POOL_REDUCE_SUM,
@@ -93,7 +93,7 @@ static double compute_value(approx_t * approx, struct vector * xv,
 
 struct gradient_state
 {
-        struct csr_mult_subrange_info mult;
+        struct block_mult_subrange_info mult;
         const v2d * linear;
         v2d * grad;
 };
@@ -102,10 +102,10 @@ static void gradient_1(size_t begin, size_t end, void * info, unsigned id)
 {
         (void)id;
         struct gradient_state * state = info;
-        csr_mult_subrange_1(begin, end, &state->mult,
-                            &begin, &end);
+        block_mult_subrange_1(begin, end, &state->mult,
+                              &begin, &end);
         assert(0 == begin%2);
-        assert((end == state->mult.csr->nrows) || (0 == end%2));
+        assert((end == state->mult.matrix->nrows) || (0 == end%2));
 
         const v2d * linear = state->linear;
         v2d * grad = state->grad;
@@ -130,12 +130,13 @@ static void gradient(struct vector * OUT_grad, approx_t * approx,
 
         struct gradient_state state
                 = {.mult = {.out = OUT_grad->x,
-                            .csr = &approx->matrix->transpose,
+                            .matrix = &approx->matrix->block_transpose,
                             .x = xv->violation},
                    .linear = (v2d*)approx->linear,
                    .grad = (v2d*)OUT_grad->x};
 
-        thread_pool_for(pool, 0, nvars, 16, gradient_1, &state);
+        thread_pool_for(pool, 0, approx->matrix->block_transpose.nblocks, 8,
+                        gradient_1, &state);
 }
 
 struct gradient2_state

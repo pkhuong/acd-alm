@@ -177,7 +177,7 @@ static int approx_update_step_size(approx_t * approx)
                 /* avoid 0*inf -> nan: if variable appears nowhere in
                  * the obj fun, directional gradient = 0. Always leave it
                  * in place by letting inv_v[i] = 1. */
-                if ((v == 0) && (c[i] == 0))
+                if ((vi == 0) && (c[i] == 0))
                         inv_v[i] = 1;
                 else    inv_v[i] = 1.0/vi;
         }

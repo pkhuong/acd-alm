@@ -164,7 +164,15 @@ static int approx_update_step_size(approx_t * approx)
         size_t nvars = approx->nvars;
         double * inv_v = approx->inv_v;
         const double * c = approx->linear;
+#ifdef ONE_STEP
+        double max_v = 0;
+        for (size_t i = 0; i < nvars; i++)
+                max_v = fmax(max_v, v[i]);
+#endif
         for (size_t i = 0; i < nvars; i++) {
+#ifdef ONE_STEP
+                v[i] = max_v;
+#endif
                 double vi = v[i];
                 /* avoid 0*inf -> nan: if variable appears nowhere in
                  * the obj fun, directional gradient = 0. Always leave it

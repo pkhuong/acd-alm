@@ -66,18 +66,21 @@ static size_t make_single_block(struct push_vector * vector, size_t start_row, s
 
         size_t alloc = 0;
         for (size_t row = start_row; row < start_row+nrows; row++) {
-                for (size_t j = row_indices[row]; j < row_indices[row+1]; j++) {
+                for (size_t j = row_indices[row];
+                     j < row_indices[row+1]; j++) {
                         size_t column = col[j];
                         entries[alloc++]
-                                = (struct matrix_entry){.column = column,
-                                                        .row = row,
-                                                        .value = value[j],
-                                                        .swizzled = (column<<32)|row};
+                                = (struct matrix_entry)
+                                {.column = column,
+                                 .row = row,
+                                 .value = value[j],
+                                 .swizzled = (column<<32)|row};
                 }
         }
         assert(nnz == alloc);
 
-        qsort(entries, nnz, sizeof(struct matrix_entry), compare_matrix_entries);
+        qsort(entries, nnz, sizeof(struct matrix_entry),
+              compare_matrix_entries);
         
         size_t col_alloc = 0;
         uint32_t * columns = calloc(nnz, sizeof(uint32_t));
@@ -92,16 +95,18 @@ static size_t make_single_block(struct push_vector * vector, size_t start_row, s
                                 assert(col > current);
                                 columns[col_alloc++] = col;
                         }
-                        values[8*(col_alloc-1)+row-start_row] = entries[i].value;
+                        values[8*(col_alloc-1)+row-start_row]
+                                = entries[i].value;
                 }
         }
 
         free(entries);
 
         struct matrix_subblock * subblock 
-                = push_vector_alloc(vector, (sizeof(struct matrix_subblock)
-                                             + BLOCK_SIZE*sizeof(double)*col_alloc
-                                             + sizeof(uint32_t)*col_alloc));
+                = push_vector_alloc(vector,
+                                    (sizeof(struct matrix_subblock)
+                                     + BLOCK_SIZE*sizeof(double)*col_alloc
+                                     + sizeof(uint32_t)*col_alloc));
         uint32_t * indices = (uint32_t *)(subblock->values+col_alloc);
         subblock->nindices = col_alloc;
         subblock->start_row = start_row;
@@ -121,6 +126,9 @@ int block_from_csr(const struct csr * csr, struct block_matrix * block)
         size_t nrow = csr->nrows;
         size_t nblock = (nrow+BLOCK_SIZE-1)/BLOCK_SIZE;
 
+        block->nrows = nrow;
+        block->nblocks = nblock;
+
         size_t * offsets
                 = block->block_offsets
                 = calloc(nblock, sizeof(size_t));
@@ -128,10 +136,11 @@ int block_from_csr(const struct csr * csr, struct block_matrix * block)
         for (size_t count = 0, i = 0; i < nrow; i+=BLOCK_SIZE, count++) {
                 size_t end = i + BLOCK_SIZE;
                 if (end > nrow) end = nrow;
-                offsets[count] = make_single_block(&alloc,
-                                                   i, end-i,
-                                                   csr->rows_indices, csr->columns,
-                                                   csr->values);
+                offsets[count]
+                        = make_single_block(&alloc,
+                                            i, end-i,
+                                            csr->rows_indices, csr->columns,
+                                            csr->values);
         }
 
         block->blocks = alloc.block;

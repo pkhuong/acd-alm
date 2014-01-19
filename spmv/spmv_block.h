@@ -15,6 +15,7 @@ struct matrix_subblock
 
 struct block_matrix
 {
+        size_t nrows;
         size_t nblocks;
         void * blocks;
         size_t * block_offsets;

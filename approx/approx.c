@@ -410,14 +410,12 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 return &state->x;
         }
 
-        if (!state->zp.violationp)
-                compute_violation(&state->zp, approx, pool);
         {
+                compute_value(approx, &state->zp, pool);
                 double theta = state->theta;
                 double next = next_theta(state);
                 linterp_xy(&state->y, &state->x, &state->zp,
                            theta, next, pool);
-                compute_value(approx, &state->zp, pool);
         }
         {
                 /* swap */

@@ -22,6 +22,7 @@ void sparse_permutation_identity(sparse_permutation_t * permutation,
 struct count_pair
 {
         uint32_t count;
+        uint32_t least;
         uint32_t initial_index;
 };
 
@@ -31,6 +32,9 @@ static int compare_count_pair(const void * x, const void * y)
                 * p2 = y;
         if (p1->count < p2->count) return -1;
         if (p1->count > p2->count) return 1;
+
+        if (p1->least < p2->least) return -1;
+        if (p1->least > p2->least) return 1;
 
         if (p1->initial_index < p2->initial_index) return -1;
         if (p1->initial_index > p2->initial_index) return 1;
@@ -63,15 +67,21 @@ void sparse_permutation_init(sparse_permutation_t * destination,
         size_t n = row?matrix->nrows:matrix->ncolumns;
         struct count_pair * pairs = calloc(n, sizeof(struct count_pair));
 
-        for (size_t i = 0; i < n; i++)
+        for (size_t i = 0; i < n; i++) {
                 pairs[i].initial_index = i;
+                pairs[i].least = -1u;
+        }
         {
                 const uint32_t * src = row?matrix->rows:matrix->columns;
+                const uint32_t * other = !row?matrix->rows:matrix->columns;
                 size_t nnz = matrix->nnz;
                 for (size_t i = 0; i < nnz; i++) {
                         uint32_t c = src[i];
+                        uint32_t r = other[i];
                         assert(c < n);
                         pairs[c].count++;
+                        if (r < pairs[c].least)
+                                pairs[c].least = r;
                 }
         }
 

@@ -497,8 +497,10 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
 {
         assert(n == approx->nvars);
 
+#ifndef APPROX_NO_PERMUTE
         if (approx->permuted)
                 approx = approx->permuted;
+#endif
 
         struct approx_state state;
         init_state(&state, approx->nvars, approx->nrhs);

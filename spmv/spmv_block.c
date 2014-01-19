@@ -98,7 +98,7 @@ static size_t make_single_block(struct push_vector * vector,
                                 assert(col > current);
                                 columns[col_alloc++] = col;
                         }
-                        values[8*(col_alloc-1)+row-start_row]
+                        values[BLOCK_SIZE*(col_alloc-1)+row-start_row]
                                 = entries[i].value;
                 }
         }

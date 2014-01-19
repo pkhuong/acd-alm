@@ -303,8 +303,8 @@ int alm_solve(alm_t * alm, size_t niter, double * x, size_t nvars,
                 int status = iter(&state, alm, x, lambda, log, i+1,
                                   &pg, &max_viol, pool);
                 if ((max_viol < 1e-5)
-                    && ((status != 2) /* 2: pg is small enough */
-                        || (pg < 1e-6))) {
+                    && (status /* stalled */
+                        || (pg < 1e-5))) {
                         ret = 0;
                         break;
                 }

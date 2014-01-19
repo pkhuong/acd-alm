@@ -55,14 +55,17 @@ static void * push_vector_alloc(struct push_vector * vector, size_t alloc)
         return ret;
 }
 
-static size_t make_single_block(struct push_vector * vector, size_t start_row, size_t nrows,
-                                const uint32_t * row_indices, const uint32_t * col,
+static size_t make_single_block(struct push_vector * vector,
+                                size_t start_row, size_t nrows,
+                                const uint32_t * row_indices,
+                                const uint32_t * col,
                                 const double * value)
 {
         assert(nrows <= BLOCK_SIZE);
         size_t nnz = row_indices[start_row+nrows]-row_indices[start_row];
 
-        struct matrix_entry * entries = calloc(nnz, sizeof(struct matrix_entry));
+        struct matrix_entry * entries = calloc(nnz,
+                                               sizeof(struct matrix_entry));
 
         size_t alloc = 0;
         for (size_t row = start_row; row < start_row+nrows; row++) {
@@ -164,7 +167,18 @@ static void mult_subblock(const struct matrix_subblock * block,
 
         block_row_t acc = (block_row_t){0.0};
         for (size_t i = 0; i < nindices; i++) {
-                block_row_t xi = (block_row_t){x[indices[i]]};
+                double xs = x[indices[i]];
+                
+                block_row_t xi =
+#if BLOCK_SIZE == 2
+                        {xs, xs};
+#elif BLOCK_SIZE == 4
+                {xs, xs, xs, xs};
+#elif BLOCK_SIZE == 8
+                {xs, xs, xs, xs, xs, xs, xs, xs};
+#else
+# error "Unknown block size" BLOCK_SIZE
+#endif
                 
                 acc += block->values[i]*xi;
         }
@@ -190,11 +204,31 @@ static void mult2_subblock(const struct matrix_subblock * block,
         for (size_t i = 0; i < nindices; i++) {
                 unsigned col = indices[i];
                 {
-                        block_row_t xi = (block_row_t){x0[col]};
+                        double xs = x0[col];
+                        block_row_t xi =
+#if BLOCK_SIZE == 2
+                                {xs, xs};
+#elif BLOCK_SIZE == 4
+                        {xs, xs, xs, xs};
+#elif BLOCK_SIZE == 8
+                        {xs, xs, xs, xs, xs, xs, xs, xs};
+#else
+# error "Unknown block size" BLOCK_SIZE
+#endif
                         acc0 += block->values[i]*xi;
                 }
                 {
-                        block_row_t xi = (block_row_t){x1[col]};
+                        double xs = x1[col];
+                        block_row_t xi =
+#if BLOCK_SIZE == 2
+                                {xs, xs};
+#elif BLOCK_SIZE == 4
+                        {xs, xs, xs, xs};
+#elif BLOCK_SIZE == 8
+                        {xs, xs, xs, xs, xs, xs, xs, xs};
+#else
+# error "Unknown block size" BLOCK_SIZE
+#endif
                         acc1 += block->values[i]*xi;
                 }
         }

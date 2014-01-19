@@ -1,6 +1,6 @@
 #ifndef SPMV_BLOCK_H
 #define SPMV_BLOCK_H
-#define BLOCK_SIZE 8
+#define BLOCK_SIZE 4
 
 struct sparse_matrix;
 
@@ -9,7 +9,9 @@ struct matrix_subblock
         uint32_t nindices;
         uint32_t start_row;
         uint32_t nrows; /* actual # to write */
-        double __attribute__((vector_size(BLOCK_SIZE*8))) values[];
+        double __attribute__((vector_size(BLOCK_SIZE*8),
+                              aligned(BLOCK_SIZE*8)))
+               values[];
 };
 
 struct block_matrix

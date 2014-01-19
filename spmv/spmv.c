@@ -66,6 +66,8 @@ sparse_matrix_t * sparse_matrix_make(size_t ncolumns, size_t nrows,
 
         csr_from_sparse_matrix(matrix, &matrix->matrix, 0);
         csr_from_sparse_matrix(matrix, &matrix->transpose, 1);
+        block_from_csr(&matrix->matrix, &matrix->block);
+        block_from_csr(&matrix->transpose, &matrix->block_transpose);
         sparse_matrix_swizzle(matrix);
 
 #ifdef USE_OSKI
@@ -106,6 +108,8 @@ int sparse_matrix_free(sparse_matrix_t * matrix)
         huge_free(matrix->values);
         csr_clear(&matrix->matrix);
         csr_clear(&matrix->transpose);
+        block_clear(&matrix->block);
+        block_clear(&matrix->block_transpose);
 #ifdef USE_OSKI
         oski_DestroyMat(matrix->oski_matrix);
         huge_free(matrix->flat_input);

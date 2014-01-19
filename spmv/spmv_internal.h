@@ -29,6 +29,8 @@ struct sparse_matrix
         double * values;
         struct csr matrix;
         struct csr transpose;
+        struct block_matrix block;
+        struct block_matrix block_transpose;
 #ifdef USE_OSKI
         oski_matrix_t oski_matrix;
         double * flat_input;

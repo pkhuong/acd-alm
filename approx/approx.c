@@ -262,7 +262,6 @@ struct approx_state
         double theta;
 
         struct vector g, g2;
-        double value;
 
         double step_length;
 };
@@ -280,7 +279,6 @@ static void init_state(struct approx_state * state,
 
         init_vector(&state->g, nvars, 0);
         init_vector(&state->g2, nvars, 0);
-        state->value = HUGE_VAL;
 
         state->step_length = 1;
 }
@@ -320,7 +318,6 @@ static int try_long_step(approx_t * approx, struct approx_state * state,
 
         double expected_improvement;
         {
-                assert(!isnan(state->z.value));
                 assert(state->z.violationp);
                 assert(state->y.violationp);
                 struct vector * g[2] = {&state->g, &state->g2};
@@ -356,7 +353,6 @@ static int short_step(approx_t * approx, struct approx_state * state,
                       double step_length, thread_pool_t * pool)
 {
         {
-                assert(!isnan(state->z.value));
                 assert(state->z.violationp);
                 assert(state->y.violationp);
                 /* FIXME: state->g not always needed! */
@@ -394,8 +390,6 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                                                          step_length, pool);
         }
 
-        state->value = compute_value(approx, &state->z, pool);
-
         if (OUT_pg != NULL)
                 *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                                 approx->lower, approx->upper);
@@ -411,7 +405,10 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
         }
 
         {
-                compute_value(approx, &state->zp, pool);
+#ifndef NO_CACHING
+                if (!state->zp.violationp)
+#endif
+                        compute_violation(&state->zp, approx, pool);
                 double theta = state->theta;
                 double next = next_theta(state);
                 linterp_xy(&state->y, &state->x, &state->zp,
@@ -488,7 +485,7 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
         memcpy(prev_x, state.x.x, n*sizeof(double));
 
         const struct vector * center = &state.x;
-        double value = state.value+offset;
+        double value = compute_value(approx, (struct vector *)center, pool)+offset;
         double ng = HUGE_VAL, pg = HUGE_VAL;
         double delta = HUGE_VAL;
         size_t i;
@@ -514,7 +511,7 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                         }
                 }
 
-                value = state.value+offset;
+                value = compute_value(approx, (struct vector *)center, pool)+offset;
                 if (value < max_value) {
                         reason = 1;
                         break;

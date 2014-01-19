@@ -211,13 +211,6 @@ int approx_update(approx_t * approx)
 #include "gradient_value.inc"
 #include "step_project.inc"
 
-static double next_theta(double theta)
-{
-        double theta2 = theta*theta,
-                theta4 = theta2*theta2;
-        return .5*(sqrt(theta4 + 4*theta2)-theta2);
-}
-
 static double dot_diff(const struct vector * gv,
                        const struct vector * zv, const struct vector * zpv)
 {
@@ -265,6 +258,7 @@ struct approx_state
         struct vector zp;
         struct vector x;
 
+        size_t iteration;
         double theta;
 
         struct vector g, g2;
@@ -281,6 +275,7 @@ static void init_state(struct approx_state * state,
         init_vector(&state->zp, nvars, nrows);
         init_vector(&state->x, nvars, nrows);
 
+        state->iteration = 0;
         state->theta = 1;
 
         init_vector(&state->g, nvars, 0);
@@ -300,6 +295,14 @@ static void destroy_state(struct approx_state * state)
         destroy_vector(&state->g2);
 
         memset(state, 0, sizeof(struct approx_state));
+}
+
+static double next_theta(struct approx_state * state)
+{
+        double theta = state->theta;
+        double theta2 = theta*theta,
+                theta4 = theta2*theta2;
+        return state->theta = .5*(sqrt(theta4 + 4*theta2)-theta2);
 }
 
 /* Assumption: y = linterp(y, theta, x, z); (only violation)
@@ -404,11 +407,11 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
         if (!state->zp.violationp)
                 compute_violation(&state->zp, approx, pool);
         {
-                double next = next_theta(state->theta);
+                double theta = state->theta;
+                double next = next_theta(state);
                 linterp_xy(&state->y, &state->x, &state->zp,
-                           state->theta, next, pool);
+                           theta, next, pool);
                 compute_value(approx, &state->zp, pool);
-                state->theta = next;
         }
         {
                 /* swap */

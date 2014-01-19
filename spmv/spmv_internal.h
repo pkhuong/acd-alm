@@ -1,6 +1,7 @@
 #ifndef SPMV_INTERNAL_H
 #define SPMV_INTERNAL_H
 #include "spmv_csr.h"
+#include "spmv_block.h"
 #ifdef USE_OSKI
 # include <oski/oski.h>
 #endif

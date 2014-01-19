@@ -299,10 +299,15 @@ static void destroy_state(struct approx_state * state)
 
 static double next_theta(struct approx_state * state)
 {
+#ifndef COMPLICATED_THETA
+        size_t k = ++state->iteration;
+        return state->theta = 2.0/(k+2);
+#else
         double theta = state->theta;
         double theta2 = theta*theta,
                 theta4 = theta2*theta2;
         return state->theta = .5*(sqrt(theta4 + 4*theta2)-theta2);
+#endif
 }
 
 /* Assumption: y = linterp(y, theta, x, z); (only violation)
@@ -400,6 +405,7 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 /* Oscillation */
                 copy_vector(&state->x, &state->z);
                 copy_vector(&state->y, &state->z);
+                state->iteration = 0;
                 state->theta = 1;
                 return &state->x;
         }

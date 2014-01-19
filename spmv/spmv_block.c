@@ -61,7 +61,7 @@ static size_t make_single_block(struct push_vector * vector,
                                 const uint32_t * col,
                                 const double * value)
 {
-        assert(nrows <= BLOCK_SIZE);
+        assert(nrows <= SPMV_BLOCK_SIZE);
         size_t nnz = row_indices[start_row+nrows]-row_indices[start_row];
 
         struct matrix_entry * entries = calloc(nnz,
@@ -87,7 +87,7 @@ static size_t make_single_block(struct push_vector * vector,
         
         size_t col_alloc = 0;
         uint32_t * columns = calloc(nnz, sizeof(uint32_t));
-        double * values = calloc(nnz*BLOCK_SIZE, sizeof(double));
+        double * values = calloc(nnz*SPMV_BLOCK_SIZE, sizeof(double));
 
         if (nnz > 0) {
                 columns[col_alloc++] = entries[0].column;
@@ -98,7 +98,7 @@ static size_t make_single_block(struct push_vector * vector,
                                 assert(col > current);
                                 columns[col_alloc++] = col;
                         }
-                        values[BLOCK_SIZE*(col_alloc-1)+row-start_row]
+                        values[SPMV_BLOCK_SIZE*(col_alloc-1)+row-start_row]
                                 = entries[i].value;
                 }
         }
@@ -108,13 +108,13 @@ static size_t make_single_block(struct push_vector * vector,
         struct matrix_subblock * subblock 
                 = push_vector_alloc(vector,
                                     (sizeof(struct matrix_subblock)
-                                     + BLOCK_SIZE*sizeof(double)*col_alloc
+                                     + SPMV_BLOCK_SIZE*sizeof(double)*col_alloc
                                      + sizeof(uint32_t)*col_alloc));
         uint32_t * indices = (uint32_t *)(subblock->values+col_alloc);
         subblock->nindices = col_alloc;
         subblock->start_row = start_row;
         subblock->nrows = nrows;
-        memcpy(subblock->values, values, col_alloc*BLOCK_SIZE*sizeof(double));
+        memcpy(subblock->values, values, col_alloc*SPMV_BLOCK_SIZE*sizeof(double));
         memcpy(indices, columns, col_alloc*sizeof(uint32_t));
 
         free(columns);
@@ -126,7 +126,7 @@ static size_t make_single_block(struct push_vector * vector,
 int block_from_csr(const struct csr * csr, struct block_matrix * block)
 {
         size_t nrow = csr->nrows;
-        size_t nblock = (nrow+BLOCK_SIZE-1)/BLOCK_SIZE;
+        size_t nblock = (nrow+SPMV_BLOCK_SIZE-1)/SPMV_BLOCK_SIZE;
 
         block->nrows = nrow;
         block->nblocks = nblock;
@@ -135,8 +135,8 @@ int block_from_csr(const struct csr * csr, struct block_matrix * block)
                 = block->block_offsets
                 = calloc(nblock, sizeof(size_t));
         struct push_vector alloc = {0, 0, 0};
-        for (size_t count = 0, i = 0; i < nrow; i+=BLOCK_SIZE, count++) {
-                size_t end = i + BLOCK_SIZE;
+        for (size_t count = 0, i = 0; i < nrow; i+=SPMV_BLOCK_SIZE, count++) {
+                size_t end = i + SPMV_BLOCK_SIZE;
                 if (end > nrow) end = nrow;
                 offsets[count]
                         = make_single_block(&alloc,
@@ -157,7 +157,7 @@ void block_clear(struct block_matrix * block)
         memset(block, 0, sizeof(struct block_matrix));
 }
 
-typedef double __attribute__((vector_size(BLOCK_SIZE*8))) block_row_t;
+typedef double __attribute__((vector_size(SPMV_BLOCK_SIZE*8))) block_row_t;
 
 static void mult_subblock(const struct matrix_subblock * block,
                           double * out, const double * x)
@@ -170,14 +170,14 @@ static void mult_subblock(const struct matrix_subblock * block,
                 double xs = x[indices[i]];
                 
                 block_row_t xi =
-#if BLOCK_SIZE == 2
+#if SPMV_BLOCK_SIZE == 2
                         {xs, xs};
-#elif BLOCK_SIZE == 4
+#elif SPMV_BLOCK_SIZE == 4
                 {xs, xs, xs, xs};
-#elif BLOCK_SIZE == 8
+#elif SPMV_BLOCK_SIZE == 8
                 {xs, xs, xs, xs, xs, xs, xs, xs};
 #else
-# error "Unknown block size" BLOCK_SIZE
+# error "Unknown block size" SPMV_BLOCK_SIZE
 #endif
                 
                 acc += block->values[i]*xi;
@@ -185,7 +185,7 @@ static void mult_subblock(const struct matrix_subblock * block,
 
         uint32_t start = block->start_row;
         uint32_t nrows = block->nrows;
-        if (nrows == BLOCK_SIZE) {
+        if (nrows == SPMV_BLOCK_SIZE) {
                 *(block_row_t*)(out+start) = acc;
         } else {
                 for (unsigned i = 0; i < nrows; i++, start++)
@@ -206,28 +206,28 @@ static void mult2_subblock(const struct matrix_subblock * block,
                 {
                         double xs = x0[col];
                         block_row_t xi =
-#if BLOCK_SIZE == 2
+#if SPMV_BLOCK_SIZE == 2
                                 {xs, xs};
-#elif BLOCK_SIZE == 4
+#elif SPMV_BLOCK_SIZE == 4
                         {xs, xs, xs, xs};
-#elif BLOCK_SIZE == 8
+#elif SPMV_BLOCK_SIZE == 8
                         {xs, xs, xs, xs, xs, xs, xs, xs};
 #else
-# error "Unknown block size" BLOCK_SIZE
+# error "Unknown block size" SPMV_BLOCK_SIZE
 #endif
                         acc0 += block->values[i]*xi;
                 }
                 {
                         double xs = x1[col];
                         block_row_t xi =
-#if BLOCK_SIZE == 2
+#if SPMV_BLOCK_SIZE == 2
                                 {xs, xs};
-#elif BLOCK_SIZE == 4
+#elif SPMV_BLOCK_SIZE == 4
                         {xs, xs, xs, xs};
-#elif BLOCK_SIZE == 8
+#elif SPMV_BLOCK_SIZE == 8
                         {xs, xs, xs, xs, xs, xs, xs, xs};
 #else
-# error "Unknown block size" BLOCK_SIZE
+# error "Unknown block size" SPMV_BLOCK_SIZE
 #endif
                         acc1 += block->values[i]*xi;
                 }
@@ -236,7 +236,7 @@ static void mult2_subblock(const struct matrix_subblock * block,
         uint32_t start = block->start_row;
         uint32_t nrows = block->nrows;
         double * out0 = out[0], * out1 = out[1];
-        if (nrows == BLOCK_SIZE) {
+        if (nrows == SPMV_BLOCK_SIZE) {
                 *(block_row_t*)(out0+start) = acc0;
                 *(block_row_t*)(out1+start) = acc1;
         } else {

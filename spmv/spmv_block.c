@@ -111,7 +111,6 @@ static size_t make_single_block(struct push_vector * vector, size_t start_row, s
         subblock->nindices = col_alloc;
         subblock->start_row = start_row;
         subblock->nrows = nrows;
-        subblock->indices = indices;
         memcpy(subblock->values, values, col_alloc*BLOCK_SIZE*sizeof(double));
         memcpy(indices, columns, col_alloc*sizeof(uint32_t));
 
@@ -161,7 +160,7 @@ static void mult_subblock(const struct matrix_subblock * block,
                           double * out, const double * x)
 {
         size_t nindices = block->nindices;
-        const uint32_t * indices = block->indices;
+        const uint32_t * indices = (const uint32_t *)(block->values+nindices);
 
         block_row_t acc = (block_row_t){0.0};
         for (size_t i = 0; i < nindices; i++) {
@@ -184,7 +183,7 @@ static void mult2_subblock(const struct matrix_subblock * block,
                            double ** out, const double ** x)
 {
         size_t nindices = block->nindices;
-        const uint32_t * indices = block->indices;
+        const uint32_t * indices = (const uint32_t *)(block->values+nindices);
         const double * x0 = x[0], * x1 = x[1];
 
         block_row_t acc0 = (block_row_t){0.0}, acc1 = acc0;

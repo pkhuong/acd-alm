@@ -9,7 +9,6 @@ struct matrix_subblock
         uint32_t nindices;
         uint32_t start_row;
         uint32_t nrows; /* actual # to write */
-        uint32_t * indices;
         double __attribute__((vector_size(BLOCK_SIZE*8))) values[];
 };
 

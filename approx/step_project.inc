@@ -274,3 +274,135 @@ gradient2_long_step(approx_t * approx, thread_pool_t * pool,
         zpv->quad_value = nan("");
         return estimate;
 }
+
+struct gradient_long_step_state
+{
+        struct gradient_state gradient;
+        struct long_step_state step;
+};
+
+static double
+gradient_long_step_1(size_t begin, size_t end, void * info,
+                      unsigned id)
+{
+        (void)id;
+        struct gradient_long_step_state * state = info;
+        const v2d * linear = state->gradient.linear;
+        v2d * g = state->gradient.grad;
+
+        v2d itheta = state->step.itheta, theta2 = state->step.theta2;
+        v2d * zp = state->step.zp;
+        const v2d  * z = state->step.z,
+                * l = state->step.l, * u = state->step.u,
+                * iv = state->step.iv, * v = state->step.v;
+        v2d linear_estimate = {0, 0};
+        v2d quad_estimate = {0, 0};
+
+        assert(g == state->step.g);
+
+        int last = 0;
+        while (!last) {
+                size_t begin2 = begin;
+                size_t end2 = begin += 128;
+                if ((end2 < begin2) || (end <= end2)) {
+                        end2 = end;
+                        last = 1;
+                }
+                csr_mult_subrange_1(begin2, end2,
+                                    &state->gradient.mult,
+                                    &begin2, &end2);
+                assert(0 == begin2%2);
+                assert((end2 == state->gradient.mult.csr->nrows)
+                       || (0 == end2%2));
+
+                size_t n = (end2+1)/2;
+                for (size_t i = begin2/2; i < n; i++) {
+                        v2d lineari = linear[i];
+                        v2d gi = g[i] += lineari;
+                        v2d zi = z[i],
+                                li = l[i], ui = u[i],
+                                inv_vi = iv[i],
+                                vi = v[i];
+                        v2d step = itheta*inv_vi;
+                        v2d trial = zi - gi*step;
+                        trial = __builtin_ia32_maxpd(li, trial);
+                        trial = __builtin_ia32_minpd(ui, trial);
+                        zp[i] = trial;
+                        v2d delta = trial - zi;
+                        linear_estimate += gi*delta;
+                        quad_estimate += delta*delta*theta2*vi;
+                }
+        }
+
+        return ((linear_estimate[0]+linear_estimate[1])
+                +.5*(quad_estimate[0]+quad_estimate[1]));        
+}
+
+static double
+gradient_long_step(approx_t * approx, thread_pool_t * pool,
+                   struct vector * OUT_grad, struct vector * yv,
+                   struct vector * zv,
+                   struct vector * zpv, double theta, double length,
+                   const double * lower, const double * upper,
+                   const double * inv_v, const double * vs)
+{
+        struct gradient_long_step_state state;
+
+        size_t n;
+
+        {
+                size_t nvars = OUT_grad->n,
+                        nrows = yv->nviolation;
+                n = nvars;
+                assert(OUT_grad->n == nvars);
+                assert(nvars == approx->nvars);
+                assert(nrows == approx->nrhs);
+                assert(nvars == yv->n);
+#ifndef NO_CACHING
+                if (!yv->violationp)
+#endif
+                        compute_violation(yv, approx, pool);
+
+                state.gradient = 
+                        (struct gradient_state)
+                        {.mult = {.out = OUT_grad->x,
+                                  .csr = &approx->matrix->transpose,
+                                  .x = yv->violation},
+                         .linear = (v2d*)approx->linear,
+                         .grad = (v2d*)OUT_grad->x};
+        }
+
+        {
+                assert(n == zpv->n);
+                struct vector * gv = OUT_grad;
+                assert(gv->n == n);
+                assert(zv->n == n);
+                
+                v2d * zp = (v2d*)zpv->x;
+                const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
+                        * l = (const v2d*)lower, * u = (const v2d*)upper,
+                        * iv = (const v2d*)inv_v, *v = (const v2d*)vs;
+                assert(length >= 1);
+                double inv_theta = (length-1e-6)/theta;
+                state.step =
+                        (struct long_step_state)
+                        { .itheta = {inv_theta, inv_theta},
+                          .theta2 = {theta/length, theta/length},
+                          .zp = zp,
+                          .g = g, .z = z,
+                          .l = l, .u = u,
+                          .iv = iv, .v = v};
+        }
+
+        double estimate
+                = thread_pool_map_reduce(pool,
+                                         0, n, 16,
+                                         gradient_long_step_1, &state,
+                                         THREAD_POOL_REDUCE_SUM,
+                                         0);
+
+        zpv->violationp = 0; /* cache is now invalid */
+        zpv->value = nan("");
+        zpv->quad_value = nan("");
+        return estimate;
+}

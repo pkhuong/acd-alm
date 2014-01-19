@@ -311,7 +311,8 @@ static double next_theta(struct approx_state * state)
 /* Assumption: y = linterp(y, theta, x, z); (only violation)
  */
 static int try_long_step(approx_t * approx, struct approx_state * state,
-                         double step_length, thread_pool_t * pool)
+                         double step_length, thread_pool_t * pool,
+                         int compute_zg)
 {
         int safe = (step_length <= 1+1e-6);
         if (safe) step_length = 1;
@@ -320,15 +321,25 @@ static int try_long_step(approx_t * approx, struct approx_state * state,
         {
                 assert(state->z.violationp);
                 assert(state->y.violationp);
-                struct vector * g[2] = {&state->g, &state->g2};
-                struct vector * x[2]= {&state->z, &state->y};
-                expected_improvement
-                        = gradient2_long_step(approx, pool,
-                                              g, x,
-                                              &state->zp,
-                                              state->theta, step_length,
-                                              approx->lower, approx->upper,
-                                              approx->inv_v, approx->v);
+                if (compute_zg) {
+                        struct vector * g[2] = {&state->g, &state->g2};
+                        struct vector * x[2]= {&state->z, &state->y};
+                        expected_improvement
+                                = gradient2_long_step(approx, pool,
+                                                      g, x,
+                                                      &state->zp,
+                                                      state->theta, step_length,
+                                                      approx->lower, approx->upper,
+                                                      approx->inv_v, approx->v);
+                } else {
+                        expected_improvement
+                                = gradient_long_step(approx, pool,
+                                                     &state->g2, &state->y, &state->z,
+                                                     &state->zp,
+                                                     state->theta, step_length,
+                                                     approx->lower, approx->upper,
+                                                     approx->inv_v, approx->v);
+                }
         }
         double initial = compute_value(approx, &state->z, pool);
         double now = compute_value(approx, &state->zp, pool);
@@ -355,7 +366,6 @@ static int short_step(approx_t * approx, struct approx_state * state,
         {
                 assert(state->z.violationp);
                 assert(state->y.violationp);
-                /* FIXME: state->g not always needed! */
                 struct vector * g[2] = {&state->g, &state->g2};
                 struct vector * x[2]= {&state->z, &state->y};
                 gradient2(g, approx, x, pool);
@@ -377,31 +387,42 @@ static const struct vector *
 iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
      thread_pool_t * pool)
 {
-        int descent_achieved;
+        int descent_achieved, got_gradient; /* gz in state->g */
         {
                 double step_length = state->step_length;
 #ifdef STATIC_STEP
                 step_length = state->step_length = 1;
 #endif
-                if (step_length <= 1)
+                if (step_length <= 1) {
                         descent_achieved = short_step(approx, state,
                                                       step_length, pool);
-                else    descent_achieved = try_long_step(approx, state,
-                                                         step_length, pool);
+                        got_gradient = 1;
+                } else {
+                        got_gradient = (OUT_pg != NULL) || (step_length <= 1+1e-6);
+                        descent_achieved = try_long_step(approx, state,
+                                                         step_length, pool,
+                                                         got_gradient);
+                }
         }
 
-        if (OUT_pg != NULL)
+        if (OUT_pg != NULL) {
+                assert(got_gradient);
                 *OUT_pg = project_gradient_norm(&state->g, &state->z,
                                                 approx->lower, approx->upper);
+        }
 
-        if ((!descent_achieved) /* Value improvement OK */
-            && (dot_diff(&state->g, &state->z, &state->zp) > 0)) {
-                /* Oscillation */
-                copy_vector(&state->x, &state->z);
-                copy_vector(&state->y, &state->z);
-                state->iteration = 0;
-                state->theta = 1;
-                return &state->x;
+        if (!descent_achieved) {
+                if (!got_gradient)
+                        gradient(&state->g, approx, &state->z, pool);
+                
+                if (dot_diff(&state->g, &state->z, &state->zp) > 0) {
+                        /* Oscillation */
+                        copy_vector(&state->x, &state->z);
+                        copy_vector(&state->y, &state->z);
+                        state->iteration = 0;
+                        state->theta = 1;
+                        return &state->x;
+                }
         }
 
         {

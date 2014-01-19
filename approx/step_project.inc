@@ -168,11 +168,11 @@ gradient2_long_step_1(size_t begin, size_t end, void * info,
                         end2 = end;
                         last = 1;
                 }
-                csr_mult2_subrange_1(begin2, end2,
-                                     &state->gradient2.mult,
-                                     &begin2, &end2);
+                block_mult2_subrange_1(begin2, end2,
+                                       &state->gradient2.mult,
+                                       &begin2, &end2);
                 assert(0 == begin2%2);
-                assert((end2 == state->gradient2.mult.csr->nrows)
+                assert((end2 == state->gradient2.mult.matrix->nrows)
                        || (0 == end2%2));
 
                 size_t n = (end2+1)/2;
@@ -233,7 +233,7 @@ gradient2_long_step(approx_t * approx, thread_pool_t * pool,
                 state.gradient2 = 
                         (struct gradient2_state)
                         {.mult = {.out = grad,
-                                  .csr = &approx->matrix->transpose,
+                                  .matrix = &approx->matrix->block_transpose,
                                   .x = x},
                          .linear = (v2d*)approx->linear,
                          .grad = {(v2d*)grad[0], (v2d*)grad[1]}};
@@ -263,11 +263,11 @@ gradient2_long_step(approx_t * approx, thread_pool_t * pool,
         }
 
         double estimate
-                = thread_pool_map_reduce(pool,
-                                         0, n, 16,
-                                         gradient2_long_step_1, &state,
-                                         THREAD_POOL_REDUCE_SUM,
-                                         0);
+                = thread_pool_map_reduce
+                (pool,
+                 0, approx->matrix->block_transpose.nblocks, 8,
+                 gradient2_long_step_1, &state,
+                 THREAD_POOL_REDUCE_SUM, 0);
 
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");

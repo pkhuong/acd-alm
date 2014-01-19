@@ -141,7 +141,7 @@ static void gradient(struct vector * OUT_grad, approx_t * approx,
 
 struct gradient2_state
 {
-        struct csr_mult2_subrange_info mult;
+        struct block_mult2_subrange_info mult;
         const v2d * linear;
         v2d * grad[2];
 };
@@ -161,10 +161,10 @@ static void gradient2_1(size_t begin, size_t end, void * info, unsigned id)
                         end2 = end;
                         last = 1;
                 }
-                csr_mult2_subrange_1(begin2, end2, &state->mult,
-                                     &begin2, &end2);
+                block_mult2_subrange_1(begin2, end2, &state->mult,
+                                       &begin2, &end2);
                 assert(0 == begin2%2);
-                assert((end2 == state->mult.csr->nrows) || (0 == end2%2));
+                assert((end2 == state->mult.matrix->nrows) || (0 == end2%2));
 
                 size_t n = (end2+1)/2;
                 for (size_t i = begin2/2; i < n; i++) {
@@ -198,10 +198,12 @@ static void gradient2(struct vector ** OUT_grad, approx_t * approx,
         const double * x[2] = {xv[0]->violation, xv[1]->violation};
         struct gradient2_state state
                 = {.mult = {.out = grad,
-                            .csr = &approx->matrix->transpose,
+                            .matrix = &approx->matrix->block_transpose,
                             .x = x},
                    .linear = (v2d*)approx->linear,
                    .grad = {(v2d*)grad[0], (v2d*)grad[1]}};
 
-        thread_pool_for(pool, 0, nvars, 16, gradient2_1, &state);
+        thread_pool_for(pool,
+                        0, approx->matrix->block_transpose.nblocks, 8,
+                        gradient2_1, &state);
 }

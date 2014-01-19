@@ -562,9 +562,9 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
         }
 
         delta = diff(prev_x, center->x, n)/(norm_2(center)+1e-10);
-        value = compute_value(approx, (struct vector*)center, pool);
+        value = compute_value(approx, (struct vector*)center, pool)
+                + offset;
         gradient(&state.g, approx, (struct vector *)center, pool);
-        value += offset;
         ng = norm_2(&state.g);
         /* We're about to free center, anyway */
         pg = project_gradient_norm(&state.g, center,

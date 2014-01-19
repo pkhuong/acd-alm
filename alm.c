@@ -239,7 +239,7 @@ static void update_precision(struct alm_state * state, alm_t * alm,
         double viol = norm_inf(violation, nrhs, NULL);
         double w = nrhs/norm_1(approx_weight(alm->approx), nrhs);
         state->precision = fmin(state->precision,
-                                fmin(pow(viol, 1),
+                                fmin(pow(viol, 1.25),
                                      pow(w, 1.25)));
         state->precision = fmax(state->precision, 1e-5);
 }

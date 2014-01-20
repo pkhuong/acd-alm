@@ -82,6 +82,24 @@ static size_t make_single_block(struct push_vector * vector,
                 }
         }
 
+        {
+#define BUFFER_SIZE 32
+                uint32_t cache[BUFFER_SIZE];
+                memset(cache, 0, sizeof(cache));
+                size_t read_ptr = 0;
+                size_t write_ptr = 0;
+                for (size_t i = total_nnz; i --> 0;) {
+                        if (values[i] == 0) {
+                                columns[i] = cache[read_ptr];
+                                read_ptr = (read_ptr+1)%BUFFER_SIZE;
+                        } else {
+                                cache[write_ptr] = columns[i];
+                                write_ptr = (write_ptr+1)%BUFFER_SIZE;
+                        }
+                }
+#undef BUFFER_SIZE
+        }
+
         struct matrix_subblock * subblock 
                 = push_vector_alloc(vector,
                                     (sizeof(struct matrix_subblock)

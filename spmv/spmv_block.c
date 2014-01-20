@@ -82,10 +82,10 @@ static size_t make_single_block(struct push_vector * vector,
                 }
         }
 
-        {
 #ifndef SPMV_BLOCK_BUFFER_SIZE
 # define SPMV_BLOCK_BUFFER_SIZE 32
 #endif
+        if (SPMV_BLOCK_BUFFER_SIZE) {
                 uint32_t cache[SPMV_BLOCK_BUFFER_SIZE];
                 size_t size = SPMV_BLOCK_BUFFER_SIZE;
                 memset(cache, 0, sizeof(cache));
@@ -100,8 +100,8 @@ static size_t make_single_block(struct push_vector * vector,
                                 write_ptr = (write_ptr+1)%size;
                         }
                 }
-#undef SPMV_BLOCK_BUFFER_SIZE
         }
+#undef SPMV_BLOCK_BUFFER_SIZE
 
         struct matrix_subblock * subblock 
                 = push_vector_alloc(vector,

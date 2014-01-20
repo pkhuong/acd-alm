@@ -181,12 +181,12 @@ int sparse_matrix_multiply(double * OUT_y, size_t ny,
         mult_oski(OUT_y, ny, a->oski_matrix, x, nx, transpose);
 #else
         {
-                struct csr_mult_subrange_info info
+                struct block_mult_subrange_info info
                         = {.out = OUT_y,
-                           .csr = transpose?&a->transpose:&a->matrix,
+                           .matrix = transpose?&a->block_transpose:&a->block,
                            .x = x};
-                thread_pool_for(pool, 0, info.csr->nrows, 16,
-                                csr_mult_subrange, &info);
+                thread_pool_for(pool, 0, info.matrix->nblocks, 16,
+                                block_mult_subrange, &info);
         }
 #endif
         return 0;
@@ -221,12 +221,12 @@ int sparse_matrix_multiply_2(double ** OUT_y, size_t ny,
                    transpose);
 #else
         {
-                struct csr_mult2_subrange_info info
+                struct block_mult2_subrange_info info
                         = {.out = OUT_y,
-                           .csr = transpose?&a->transpose:&a->matrix,
+                           .matrix = transpose?&a->block_transpose:&a->block,
                            .x = x};
-                thread_pool_for(pool, 0, info.csr->nrows, 16,
-                                csr_mult2_subrange, &info);
+                thread_pool_for(pool, 0, info.matrix->nblocks, 16,
+                                block_mult2_subrange, &info);
         }
 #endif
         return 0;

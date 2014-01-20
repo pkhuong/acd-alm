@@ -83,21 +83,24 @@ static size_t make_single_block(struct push_vector * vector,
         }
 
         {
-#define BUFFER_SIZE 32
-                uint32_t cache[BUFFER_SIZE];
+#ifndef SPMV_BLOCK_BUFFER_SIZE
+# define SPMV_BLOCK_BUFFER_SIZE 32
+#endif
+                uint32_t cache[SPMV_BLOCK_BUFFER_SIZE];
+                size_t size = SPMV_BLOCK_BUFFER_SIZE;
                 memset(cache, 0, sizeof(cache));
                 size_t read_ptr = 0;
                 size_t write_ptr = 0;
                 for (size_t i = total_nnz; i --> 0;) {
                         if (values[i] == 0) {
                                 columns[i] = cache[read_ptr];
-                                read_ptr = (read_ptr+1)%BUFFER_SIZE;
+                                read_ptr = (read_ptr+1)%size;
                         } else {
                                 cache[write_ptr] = columns[i];
-                                write_ptr = (write_ptr+1)%BUFFER_SIZE;
+                                write_ptr = (write_ptr+1)%size;
                         }
                 }
-#undef BUFFER_SIZE
+#undef SPMV_BLOCK_BUFFER_SIZE
         }
 
         struct matrix_subblock * subblock 

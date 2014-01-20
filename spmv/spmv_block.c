@@ -62,60 +62,37 @@ static size_t make_single_block(struct push_vector * vector,
                                 const double * value)
 {
         assert(nrows <= SPMV_BLOCK_SIZE);
-        size_t nnz = row_indices[start_row+nrows]-row_indices[start_row];
-
-        struct matrix_entry * entries = calloc(nnz,
-                                               sizeof(struct matrix_entry));
-
-        size_t alloc = 0;
-        for (size_t row = start_row; row < start_row+nrows; row++) {
-                for (size_t j = row_indices[row];
-                     j < row_indices[row+1]; j++) {
-                        size_t column = col[j];
-                        entries[alloc++]
-                                = (struct matrix_entry)
-                                {.column = column,
-                                 .row = row,
-                                 .value = value[j],
-                                 .swizzled = (column<<32)|row};
-                }
-        }
-        assert(nnz == alloc);
-
-        qsort(entries, nnz, sizeof(struct matrix_entry),
-              compare_matrix_entries);
-        
-        size_t col_alloc = 0;
-        uint32_t * columns = calloc(nnz, sizeof(uint32_t));
-        double * values = calloc(nnz*SPMV_BLOCK_SIZE, sizeof(double));
-
-        if (nnz > 0) {
-                columns[col_alloc++] = entries[0].column;
-                for (size_t i = 0; i < nnz; i++) {
-                        size_t current = columns[col_alloc-1];
-                        size_t col = entries[i].column, row = entries[i].row;
-                        if (col != current) {
-                                assert(col > current);
-                                columns[col_alloc++] = col;
-                        }
-                        values[SPMV_BLOCK_SIZE*(col_alloc-1)+row-start_row]
-                                = entries[i].value;
-                }
+        size_t nnz = 0;
+        for (size_t i = 0, row = start_row; i < nrows; i++, row++) {
+                size_t n = row_indices[row+1]-row_indices[row];
+                if (n > nnz)
+                        nnz = n;
         }
 
-        free(entries);
+        size_t total_nnz = SPMV_BLOCK_SIZE*nnz;
+        uint32_t * columns = calloc(total_nnz, sizeof(uint32_t));
+        double * values = calloc(total_nnz, sizeof(double));
+
+        for (size_t i = 0, row = start_row; i < nrows; i++, row++) {
+                for (size_t j = row_indices[row], k = i;
+                     j < row_indices[row+1];
+                     j++, k += SPMV_BLOCK_SIZE) {
+                        columns[k] = col[j];
+                        values[k] = value[j];
+                }
+        }
 
         struct matrix_subblock * subblock 
                 = push_vector_alloc(vector,
                                     (sizeof(struct matrix_subblock)
-                                     + SPMV_BLOCK_SIZE*sizeof(double)*col_alloc
-                                     + sizeof(uint32_t)*col_alloc));
-        uint32_t * indices = (uint32_t *)(subblock->values+col_alloc);
-        subblock->nindices = col_alloc;
+                                     + sizeof(double)*total_nnz
+                                     + sizeof(uint32_t)*total_nnz));
+        uint32_t * indices = (uint32_t *)(subblock->values+nnz);
+        subblock->nnz = nnz;
         subblock->start_row = start_row;
         subblock->nrows = nrows;
-        memcpy(subblock->values, values, col_alloc*SPMV_BLOCK_SIZE*sizeof(double));
-        memcpy(indices, columns, col_alloc*sizeof(uint32_t));
+        memcpy(subblock->values, values, total_nnz*sizeof(double));
+        memcpy(indices, columns, total_nnz*sizeof(uint32_t));
 
         free(columns);
         free(values);
@@ -162,24 +139,25 @@ typedef double __attribute__((vector_size(SPMV_BLOCK_SIZE*8))) block_row_t;
 static void mult_subblock(const struct matrix_subblock * block,
                           double * out, const double * x)
 {
-        size_t nindices = block->nindices;
-        const uint32_t * indices = (const uint32_t *)(block->values+nindices);
+        size_t nnz = block->nnz;
+        const uint32_t * indices = (const uint32_t *)(block->values+nnz);
 
         block_row_t acc = (block_row_t){0.0};
-        for (size_t i = 0; i < nindices; i++) {
-                double xs = x[indices[i]];
-                
+        for (size_t i = 0; i < nnz; i++) {
+                const uint32_t *col = indices+i*SPMV_BLOCK_SIZE;
                 block_row_t xi =
-#if SPMV_BLOCK_SIZE == 2
-                        {xs, xs};
+#if SPMV_BLOCK_SIZE == 1
+                                {x[col[0]]};
+#elif SPMV_BLOCK_SIZE == 2
+                        {x[col[0]], x[col[1]]};
 #elif SPMV_BLOCK_SIZE == 4
-                {xs, xs, xs, xs};
+                {x[col[0]], x[col[1]], x[col[2]], x[col[3]]};
 #elif SPMV_BLOCK_SIZE == 8
-                {xs, xs, xs, xs, xs, xs, xs, xs};
+                {x[col[0]], x[col[1]], x[col[2]], x[col[3]],
+                 x[col[4]], x[col[5]], x[col[6]], x[col[7]]};
 #else
 # error "Unknown block size" SPMV_BLOCK_SIZE
 #endif
-                
                 acc += block->values[i]*xi;
         }
 
@@ -196,40 +174,45 @@ static void mult_subblock(const struct matrix_subblock * block,
 static void mult2_subblock(const struct matrix_subblock * block,
                            double ** out, const double ** x)
 {
-        size_t nindices = block->nindices;
-        const uint32_t * indices = (const uint32_t *)(block->values+nindices);
+        size_t nnz = block->nnz;
+        const uint32_t * indices = (const uint32_t *)(block->values+nnz);
         const double * x0 = x[0], * x1 = x[1];
 
         block_row_t acc0 = (block_row_t){0.0}, acc1 = acc0;
-        for (size_t i = 0; i < nindices; i++) {
-                unsigned col = indices[i];
+        for (size_t i = 0; i < nnz; i++) {
+                const uint32_t *col = indices+i*SPMV_BLOCK_SIZE;
+                block_row_t row = block->values[i];
                 {
-                        double xs = x0[col];
-                        block_row_t xi =
-#if SPMV_BLOCK_SIZE == 2
-                                {xs, xs};
+                        block_row_t xi = 
+#if SPMV_BLOCK_SIZE == 1
+                                {x0[col[0]]};
+#elif SPMV_BLOCK_SIZE == 2
+                                {x0[col[0]], x0[col[1]]};
 #elif SPMV_BLOCK_SIZE == 4
-                        {xs, xs, xs, xs};
+                        {x0[col[0]], x0[col[1]], x0[col[2]], x0[col[3]]};
 #elif SPMV_BLOCK_SIZE == 8
-                        {xs, xs, xs, xs, xs, xs, xs, xs};
+                        {x0[col[0]], x0[col[1]], x0[col[2]], x0[col[3]],
+                         x0[col[4]], x0[col[5]], x0[col[6]], x0[col[7]]};
 #else
 # error "Unknown block size" SPMV_BLOCK_SIZE
 #endif
-                        acc0 += block->values[i]*xi;
+                        acc0 += row*xi;
                 }
                 {
-                        double xs = x1[col];
                         block_row_t xi =
-#if SPMV_BLOCK_SIZE == 2
-                                {xs, xs};
+#if SPMV_BLOCK_SIZE == 1
+                                {x1[col[0]]};
+#elif SPMV_BLOCK_SIZE == 2
+                                {x1[col[0]], x1[col[1]]};
 #elif SPMV_BLOCK_SIZE == 4
-                        {xs, xs, xs, xs};
+                        {x1[col[0]], x1[col[1]], x1[col[2]], x1[col[3]]};
 #elif SPMV_BLOCK_SIZE == 8
-                        {xs, xs, xs, xs, xs, xs, xs, xs};
+                        {x1[col[0]], x1[col[1]], x1[col[2]], x1[col[3]],
+                         x1[col[4]], x1[col[5]], x1[col[6]], x1[col[7]]};
 #else
 # error "Unknown block size" SPMV_BLOCK_SIZE
 #endif
-                        acc1 += block->values[i]*xi;
+                        acc1 += row*xi;
                 }
         }
 

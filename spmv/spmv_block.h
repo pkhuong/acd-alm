@@ -1,14 +1,14 @@
 #ifndef SPMV_BLOCK_H
 #define SPMV_BLOCK_H
 #ifndef SPMV_BLOCK_SIZE
-# define SPMV_BLOCK_SIZE 2
+# define SPMV_BLOCK_SIZE 4
 #endif
 
 struct sparse_matrix;
 
 struct matrix_subblock
 {
-        uint32_t nindices;
+        uint32_t nnz;
         uint32_t start_row;
         uint32_t nrows; /* actual # to write */
         double __attribute__((vector_size(SPMV_BLOCK_SIZE*8),

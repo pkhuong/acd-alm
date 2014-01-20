@@ -219,8 +219,27 @@ int approx_update(approx_t * approx)
 #include "gradient_value.inc"
 #include "step_project.inc"
 
+struct dot_diff_state
+{
+        const v2d * g, * z, *zp;
+};
+
+static double dot_diff_1(size_t begin, size_t end, void * info,
+                         unsigned id)
+{
+        (void)id;
+        struct dot_diff_state * state = info;
+        const v2d * g = state->g, * z = state->z, * zp = state->zp;
+
+        v2d acc = {0,0};
+        for (size_t i = begin; i < end; i++)
+                acc += g[i]*(zp[i]-z[i]);
+        return acc[0]+acc[1];
+}
+
 static double dot_diff(const struct vector * gv,
-                       const struct vector * zv, const struct vector * zpv)
+                       const struct vector * zv, const struct vector * zpv,
+                       thread_pool_t * pool)
 {
         size_t n = gv->n;
         assert(zv->n == n);
@@ -228,13 +247,12 @@ static double dot_diff(const struct vector * gv,
 
         const v2d * g = (v2d*)gv->x,
                 * z = (v2d*)zv->x, * zp = (v2d*)zpv->x;
-
-        v2d acc = {0,0};
+        struct dot_diff_state state
+                = {.g = g, .z = z, .zp = zp};
         size_t vector_n = (n+1)/2;
-        for (size_t i = 0; i < vector_n; i++)
-                acc += g[i]*(zp[i]-z[i]);
-
-        return acc[0]+acc[1];
+        return thread_pool_map_reduce(pool, 0, vector_n, 512,
+                                      dot_diff_1, &state,
+                                      THREAD_POOL_REDUCE_SUM, 0);
 }
 
 static double project_gradient_norm(const struct vector * gv,
@@ -423,7 +441,8 @@ iter(approx_t * approx, struct approx_state * state, double * OUT_pg,
                 if (!got_gradient)
                         gradient(&state->g, approx, &state->z, pool);
                 
-                if (dot_diff(&state->g, &state->z, &state->zp) > 0) {
+                if (dot_diff(&state->g, &state->z, &state->zp,
+                             pool) > 0) {
                         /* Oscillation */
                         copy_vector(&state->x, &state->z);
                         copy_vector(&state->y, &state->z);

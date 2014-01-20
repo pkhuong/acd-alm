@@ -185,11 +185,11 @@ mult_subblock(const struct matrix_subblock * block,
 
         uint32_t start = block->start_row;
         uint32_t nrows = block->nrows;
+        assert(0 == start%4);
         if (nrows == SPMV_BLOCK_SIZE) {
-                *(block_row_t*)(out+start) = acc;
+                memcpy(out+start, &acc, sizeof(block_row_t));
         } else {
-                for (unsigned i = 0; i < nrows; i++, start++)
-                        out[start] = acc[i];
+                memcpy(out+start, &acc, sizeof(double)*nrows);
         }
 }
 

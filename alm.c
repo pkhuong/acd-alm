@@ -232,16 +232,16 @@ static void free_alm_state(struct alm_state * state)
         memset(state, 0, sizeof(struct alm_state));
 }
 
-static void update_precision(struct alm_state * state, alm_t * alm, 
+static void update_precision(struct alm_state * state, alm_t * alm,
                              const double * violation)
 {
         size_t nrhs = alm->nrhs;
         double viol = norm_inf(violation, nrhs, NULL);
         double w = nrhs/norm_1(approx_weight(alm->approx), nrhs);
         state->precision = fmin(state->precision,
-                                fmin(pow(viol, 1.25),
-                                     pow(w, 1.25)));
-        state->precision = fmax(state->precision, 1e-5);
+                                fmin(pow(viol, 1),
+                                     pow(w, 1.5)));
+        state->precision = fmax(state->precision, 1e-7);
 }
 
 static int iter(struct alm_state * state, alm_t * alm,

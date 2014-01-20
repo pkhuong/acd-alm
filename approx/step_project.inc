@@ -21,25 +21,27 @@ static void project(struct vector * xv,
         }
 }
 
-static void step(struct vector * zpv, double theta,
-                 const struct vector * gv, const struct vector * zv,
-                 const double * restrict lower, const double * restrict upper,
-                 const double * restrict inv_v)
+struct step_state
 {
-        size_t n = zpv->n;
-        assert(gv->n == n);
-        assert(zv->n == n);
+        v2d * zp;
+        const v2d * g, * z, * l, * u, * iv;
+        v2d itheta;
+};
 
-        size_t vector_n = (n+1)/2;
-        v2d * zp = (v2d*)zpv->x;
-        const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
-                * l = (const v2d*)lower, * u = (const v2d*)upper,
-                * iv = (const v2d*)inv_v;
-        v2d max_z = {0,0};
-        double inv_theta = (1-1e-6)/theta;   /* protect vs rounding */
-        v2d itheta = {inv_theta, inv_theta}; /* errors. */
+static double step_1(size_t begin, size_t end, void * info,
+                     unsigned id)
+{
+        (void)id;
+        struct step_state * state = info;
+        v2d * zp = state->zp;
+        const v2d * g = state->g, * z = state->z,
+                * l = state->l, * u = state->u,
+                * iv = state->iv;
+        v2d itheta = state->itheta;
         v2ul mask = {~(1ull<<63), ~(1ull<<63)};
-        for (size_t i = 0; i < vector_n; i++) {
+
+        v2d max_z = {0,0};
+        for (size_t i = begin; i < end; i++) {
                 v2d gi = g[i], zi = z[i],
                         li = l[i], ui = u[i],
                         inv_vi = iv[i];
@@ -51,7 +53,38 @@ static void step(struct vector * zpv, double theta,
                 max_z = __builtin_ia32_maxpd(max_z,
                                              (v2d)((v2ul)trial&mask));
         }
-        assert(max(max_z[0], max_z[1]) < HUGE_VAL);
+        return max(max_z[0], max_z[1]);
+}
+
+static void step(struct vector * zpv, double theta,
+                 const struct vector * gv, const struct vector * zv,
+                 const double * restrict lower, const double * restrict upper,
+                 const double * restrict inv_v,
+                 thread_pool_t * pool)
+{
+        size_t n = zpv->n;
+        assert(gv->n == n);
+        assert(zv->n == n);
+
+        size_t vector_n = (n+1)/2;
+        v2d * zp = (v2d*)zpv->x;
+        const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
+                * l = (const v2d*)lower, * u = (const v2d*)upper,
+                * iv = (const v2d*)inv_v;
+
+        double inv_theta = (1-1e-6)/theta;   /* protect vs rounding */
+        v2d itheta = {inv_theta, inv_theta}; /* errors. */
+        struct step_state state
+                = {.zp = zp, 
+                   .g = g, .z = z,
+                   .l = l, .u = u,
+                   .iv = iv,
+                   .itheta = itheta};
+        double max_z = thread_pool_map_reduce(pool,
+                                              0, vector_n, 512,
+                                              step_1, &state,
+                                              THREAD_POOL_REDUCE_MAX, 0);
+        assert(max_z < HUGE_VAL);
         zpv->violationp = 0; /* cache is now invalid */
         zpv->value = nan("");
         zpv->quad_value = nan("");

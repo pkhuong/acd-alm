@@ -381,7 +381,8 @@ static int try_long_step(approx_t * approx, struct approx_state * state,
                 step(&state->zp, state->theta,
                      &state->g2, &state->z,
                      approx->lower, approx->upper,
-                     approx->inv_v);
+                     approx->inv_v,
+                     pool);
 
         return 0;
 }
@@ -400,7 +401,8 @@ static int short_step(approx_t * approx, struct approx_state * state,
         step(&state->zp, state->theta,
              &state->g2, &state->z,
              approx->lower, approx->upper,
-             approx->inv_v);
+             approx->inv_v,
+             pool);
 
         state->step_length = step_length * 1.01;
         if (state->step_length > 1)

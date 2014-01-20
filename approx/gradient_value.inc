@@ -1,5 +1,10 @@
 #include "../spmv/spmv_internal.h"
 
+#ifndef APPROX_SPMV_CHUNK
+# define APPROX_SPMV_CHUNK 128
+#endif
+
+
 struct compute_violation_state
 {
         struct block_mult_subrange_info mult;
@@ -20,7 +25,7 @@ static double compute_violation_1(size_t begin, size_t end,
         int last = 0;
         while (!last) {
                 size_t begin2 = begin;
-                size_t end2 = begin += 512;
+                size_t end2 = begin += APPROX_SPMV_CHUNK;
                 if ((end2 < begin2) || (end <= end2)) {
                         end2 = end;
                         last = 1;
@@ -156,7 +161,7 @@ static void gradient2_1(size_t begin, size_t end, void * info, unsigned id)
         int last = 0;
         while (!last) {
                 size_t begin2 = begin;
-                size_t end2 = begin += 512;
+                size_t end2 = begin += APPROX_SPMV_CHUNK;
                 if ((end2 < begin2) || (end <= end2)) {
                         end2 = end;
                         last = 1;

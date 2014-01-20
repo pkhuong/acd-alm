@@ -163,7 +163,7 @@ gradient2_long_step_1(size_t begin, size_t end, void * info,
         int last = 0;
         while (!last) {
                 size_t begin2 = begin;
-                size_t end2 = begin += 128;
+                size_t end2 = begin += APPROX_SPMV_CHUNK;
                 if ((end2 < begin2) || (end <= end2)) {
                         end2 = end;
                         last = 1;
@@ -303,7 +303,7 @@ gradient_long_step_1(size_t begin, size_t end, void * info,
         int last = 0;
         while (!last) {
                 size_t begin2 = begin;
-                size_t end2 = begin += 128;
+                size_t end2 = begin += APPROX_SPMV_CHUNK;
                 if ((end2 < begin2) || (end <= end2)) {
                         end2 = end;
                         last = 1;

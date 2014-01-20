@@ -57,7 +57,7 @@ static void fisher_yates(void * data, size_t nmemb, size_t size)
 }
 
 #ifndef PERMUTATION_SORTING_SCOPE
-# define PERMUTATION_SORTING_SCOPE -1ul
+# define PERMUTATION_SORTING_SCOPE 256
 #endif
 
 void sparse_permutation_init(sparse_permutation_t * destination,
@@ -93,7 +93,7 @@ void sparse_permutation_init(sparse_permutation_t * destination,
                 }
         }
 
-        {
+        if (PERMUTATION_SORTING_SCOPE) {
                 struct count_pair * to_sort = pairs;
                 for (size_t i = 0; i < n;) {
                         size_t m = PERMUTATION_SORTING_SCOPE;

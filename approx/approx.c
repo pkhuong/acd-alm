@@ -516,7 +516,8 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
         memcpy(prev_x, state.x.x, n*sizeof(double));
 
         const struct vector * center = &state.x;
-        double value = compute_value(approx, (struct vector *)center, pool)+offset;
+        double value = compute_value(approx, (struct vector *)center, pool)
+                + offset;
         double ng = HUGE_VAL, pg = HUGE_VAL;
         double delta = HUGE_VAL;
         size_t i;
@@ -542,7 +543,8 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                         }
                 }
 
-                value = compute_value(approx, (struct vector *)center, pool)+offset;
+                value = compute_value(approx, (struct vector *)center, pool)
+                        + offset;
                 if (value < max_value) {
                         reason = 1;
                         break;
@@ -555,7 +557,9 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
 
                 if ((i+1)%100 == 0) {
                         center = &state.x;
-                        value = compute_value(approx, &state.x, pool);
+                        compute_violation(&state.x, approx, pool);
+                        value = compute_value(approx, &state.x, pool)
+                                + offset;
                         gradient(&state.g, approx, &state.x, pool);
                         pg = project_gradient_norm(&state.g, &state.x,
                                                    approx->lower,
@@ -575,7 +579,6 @@ int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                                 break;
                         }
                         memcpy(prev_x, state.x.x, n*sizeof(double));
-                        compute_violation(&state.x, approx, pool);
                 }
                 if ((i == 0) || (period && ((i+1)%period == 0))) {
                         if (restart) {

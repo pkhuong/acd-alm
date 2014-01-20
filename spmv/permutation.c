@@ -80,8 +80,12 @@ void sparse_permutation_init(sparse_permutation_t * destination,
                         uint32_t r = other[i];
                         assert(c < n);
                         pairs[c].count++;
+#ifdef PERMUTATION_FIRST_NZ
                         if (r < pairs[c].least)
                                 pairs[c].least = r;
+#else
+                        (void)r;
+#endif
                 }
         }
 

@@ -157,8 +157,9 @@ void block_clear(struct block_matrix * block)
 
 typedef double __attribute__((vector_size(SPMV_BLOCK_SIZE*8))) block_row_t;
 
-static void mult_subblock(const struct matrix_subblock * block,
-                          double * out, const double * x)
+static inline void 
+mult_subblock(const struct matrix_subblock * block,
+              double * out, const double * x)
 {
         size_t nnz = block->nnz;
         const uint32_t * indices = (const uint32_t *)(block->values+nnz);
@@ -192,8 +193,9 @@ static void mult_subblock(const struct matrix_subblock * block,
         }
 }
 
-static void mult2_subblock(const struct matrix_subblock * block,
-                           double ** out, const double ** x)
+static inline void
+mult2_subblock(const struct matrix_subblock * block,
+               double ** out, const double ** x)
 {
         size_t nnz = block->nnz;
         const uint32_t * indices = (const uint32_t *)(block->values+nnz);
@@ -252,7 +254,8 @@ static void mult2_subblock(const struct matrix_subblock * block,
 }
                            
 #define GET_SUBBLOCK(MATRIX, INDEX) ((struct matrix_subblock*)          \
-                                     ((char*)((MATRIX)->blocks)+(MATRIX)->block_offsets[INDEX]))
+                                     ((char*)((MATRIX)->blocks)         \
+                                      + (MATRIX)->block_offsets[INDEX]))
 
 void block_mult_subrange_1(size_t from, size_t end,
                            struct block_mult_subrange_info * info,

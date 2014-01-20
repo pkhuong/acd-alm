@@ -83,7 +83,7 @@ static size_t make_single_block(struct push_vector * vector,
         }
 
 #ifndef SPMV_BLOCK_BUFFER_SIZE
-# define SPMV_BLOCK_BUFFER_SIZE 32
+# define SPMV_BLOCK_BUFFER_SIZE 16
 #endif
         if (SPMV_BLOCK_BUFFER_SIZE) {
                 uint32_t cache[SPMV_BLOCK_BUFFER_SIZE];

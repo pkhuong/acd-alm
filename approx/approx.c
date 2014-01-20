@@ -396,13 +396,14 @@ static int short_step(approx_t * approx, struct approx_state * state,
                 struct vector * g[2] = {&state->g, &state->g2};
                 struct vector * x[2]= {&state->z, &state->y};
                 gradient2(g, approx, x, pool);
-        }
 
-        step(&state->zp, state->theta,
-             &state->g2, &state->z,
-             approx->lower, approx->upper,
-             approx->inv_v,
-             pool);
+                gradient2_step(approx, pool,
+                               g, x,
+                               &state->zp, state->theta,
+                               &state->g2, &state->z,
+                               approx->lower, approx->upper,
+                               approx->inv_v);
+        }
 
         state->step_length = step_length * 1.01;
         if (state->step_length > 1)

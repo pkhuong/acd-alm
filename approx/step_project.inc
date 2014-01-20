@@ -439,3 +439,140 @@ gradient_long_step(approx_t * approx, thread_pool_t * pool,
         zpv->quad_value = nan("");
         return estimate;
 }
+
+struct gradient2_step_state
+{
+        struct gradient2_state gradient;
+        struct step_state step;
+};
+
+double gradient2_step_1(size_t begin, size_t end, void * info,
+                        unsigned id)
+{
+        (void)id;
+        struct gradient2_step_state * state = info;
+        
+        const v2d * linear = state->gradient.linear;
+        v2d * g0 = state->gradient.grad[0], 
+                * g1 = state->gradient.grad[1];
+
+        v2d * zp = state->step.zp;
+        const v2d * g = state->step.g, * z = state->step.z,
+                * l = state->step.l, * u = state->step.u,
+                * iv = state->step.iv;
+        v2d itheta = state->step.itheta;
+        v2ul mask = {~(1ull<<63), ~(1ull<<63)};
+
+        assert(g == g1);
+
+        v2d max_z = {0,0};
+        int last = 0;
+        while (!last) {
+                size_t begin2 = begin;
+                size_t end2 = begin += APPROX_SPMV_CHUNK;
+                if ((end2 < begin2) || (end <= end2)) {
+                        end2 = end;
+                        last = 1;
+                }
+                block_mult2_subrange_1(begin2, end2,
+                                       &state->gradient.mult,
+                                       &begin2, &end2);
+                assert(0 == begin2%2);
+                assert((end2 == state->gradient.mult.matrix->nrows)
+                       || (0 == end2%2));
+
+                size_t n = (end2+1)/2;
+                for (size_t i = begin2/2; i < n; i++) {
+                        v2d gi;
+                        {
+                                v2d li = linear[i];
+                                g0[i] += li;
+                                gi = g1[i] += li;
+                        }
+                        v2d zi = z[i],
+                                li = l[i], ui = u[i],
+                                inv_vi = iv[i];
+                        v2d step = itheta*inv_vi;
+                        v2d trial = zi - gi*step;
+                        trial = __builtin_ia32_maxpd(li, trial);
+                        trial = __builtin_ia32_minpd(ui, trial);
+                        zp[i] = trial;
+                        max_z = __builtin_ia32_maxpd(max_z,
+                                                     (v2d)((v2ul)trial&mask));
+                }
+        }
+        return max(max_z[0], max_z[1]);
+}
+
+static void
+gradient2_step(approx_t * approx, thread_pool_t * pool,
+               struct vector ** OUT_grad, struct vector ** xv,
+               struct vector * zpv, double theta,
+               const struct vector * gv, const struct vector * zv,
+               const double * restrict lower, const double * restrict upper,
+               const double * restrict inv_v)
+{
+        struct gradient2_step_state state;
+
+        double * grad[2] = {OUT_grad[0]->x, OUT_grad[1]->x};
+        const double * x[2] = {xv[0]->violation, xv[1]->violation};
+        size_t n = zpv->n;
+
+        {
+                size_t nvars = OUT_grad[0]->n,
+                        nrows = xv[0]->nviolation;
+                assert(n == nvars);
+                assert(OUT_grad[1]->n == nvars);
+                assert(xv[1]->nviolation == nrows);
+                assert(nvars == approx->nvars);
+                assert(nrows == approx->nrhs);
+                for (size_t i = 0; i < 2; i++)
+                        assert(nvars == xv[i]->n);
+                
+                for (size_t i = 0; i < 2; i++) {
+#ifndef NO_CACHING
+                        if (!xv[i]->violationp)
+#endif
+                                compute_violation(xv[i], approx, pool);
+                }
+
+
+                state.gradient
+                        = (struct gradient2_state)
+                        {.mult = {.out = grad,
+                                  .matrix = &approx->matrix->block_transpose,
+                                  .x = x},
+                         .linear = (v2d*)approx->linear,
+                         .grad = {(v2d*)grad[0], (v2d*)grad[1]}};
+        }
+        {
+                assert(gv->n == n);
+                assert(zv->n == n);
+                
+                v2d * zp = (v2d*)zpv->x;
+                const v2d * g = (const v2d*)gv->x, * z = (v2d*)zv->x,
+                        * l = (const v2d*)lower, * u = (const v2d*)upper,
+                        * iv = (const v2d*)inv_v;
+                
+                double inv_theta = (1-1e-6)/theta;   /* protect vs rounding */
+                v2d itheta = {inv_theta, inv_theta}; /* errors. */
+                state.step
+                        = (struct step_state)
+                        {.zp = zp, 
+                         .g = g, .z = z,
+                         .l = l, .u = u,
+                         .iv = iv,
+                         .itheta = itheta};
+        }
+
+        double max_z
+                = thread_pool_map_reduce
+                (pool,
+                 0, approx->matrix->block_transpose.nblocks, 16,
+                 gradient2_step_1, &state,
+                 THREAD_POOL_REDUCE_MAX, 0);
+        assert(max_z < HUGE_VAL);
+        zpv->violationp = 0; /* cache is now invalid */
+        zpv->value = nan("");
+        zpv->quad_value = nan("");        
+}

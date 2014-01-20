@@ -56,6 +56,10 @@ static void fisher_yates(void * data, size_t nmemb, size_t size)
         free(temp);
 }
 
+#ifndef PERMUTATION_SORTING_SCOPE
+# define PERMUTATION_SORTING_SCOPE -1ul
+#endif
+
 void sparse_permutation_init(sparse_permutation_t * destination,
                              const sparse_matrix_t * matrix,
                              int row)
@@ -89,7 +93,19 @@ void sparse_permutation_init(sparse_permutation_t * destination,
                 }
         }
 
-        qsort(pairs, n, sizeof(struct count_pair), compare_count_pair);
+        {
+                struct count_pair * to_sort = pairs;
+                for (size_t i = 0; i < n;) {
+                        size_t m = PERMUTATION_SORTING_SCOPE;
+                        if ((n - i) < m)
+                                m = n-i;
+                        qsort(to_sort, m, sizeof(struct count_pair),
+                              compare_count_pair);
+                        i += m;
+                        to_sort += m;
+                }
+        }
+
 #ifdef PERMUTATION_SHUFFLE
         fisher_yates(pairs, n/8, 8*sizeof(struct count_pair));
 #else

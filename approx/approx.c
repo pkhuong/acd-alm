@@ -522,7 +522,6 @@ int mpg_solve(double * x, size_t n, approx_t * approx, size_t niter,
               double offset, thread_pool_t * pool)
 {
         (void)min_delta;
-        (void)period;
         (void)OUT_diagnosis;
         assert(n == approx->nvars);
 
@@ -538,16 +537,37 @@ int mpg_solve(double * x, size_t n, approx_t * approx, size_t niter,
                                   x, 1);
         project(&state.x, approx->lower, approx->upper);
 
-        for (size_t i = 0; i < niter; i++) {
+        int reason = 0;
+        size_t i;
+        for (i = 0; (i < niter) && !reason; i++) {
                 double pg;
                 mpg_iter(approx, &state, &pg, pool);
                 double value = offset + compute_value(approx, &state.x, pool);
-                if (log)
-                        fprintf(log, "%zu: %f %f\n", i, pg, value);
-                if (pg < max_pg) break;
-                if (value < max_value) break;
+                if (pg < max_pg) reason = 2;
+                if (value < max_value) reason = 1;
+
+                if (log && ((period && (i%period == 0))
+                            || (i == 0)
+                            || reason))
+                        fprintf(log, "%10zu: %12g %12g\n", i, pg, value);
         }
 
+        sparse_matrix_col_permute(approx->matrix, x, n,
+                                  state.x.x, -1);
+
+        if (OUT_diagnosis != NULL) {
+                gradient(&state.g, approx, &state.x, pool);
+                OUT_diagnosis[0] = offset + compute_value(approx, &state.x, pool);
+                OUT_diagnosis[1] = norm_2(&state.g);
+                OUT_diagnosis[2] = project_gradient_norm(&state.g,
+                                                         &state.x,
+                                                         approx->lower,
+                                                         approx->upper);
+                OUT_diagnosis[3] = HUGE_VAL;
+                OUT_diagnosis[4] = i+1;
+        }
+
+        destroy_state(&state);
         return 2;
 }
 
@@ -738,10 +758,10 @@ void test_1(size_t nrows, size_t ncolumns)
         approx_t * a = approx_make(m, nrows, rhs, NULL, ncolumns,
                                  NULL, NULL, NULL);
         double diagnosis[5];
-        int r = approx_solve(x, ncolumns, a, -1U,
-                             0, 1e-13, 0,
-                             stdout, 10000, diagnosis, 0,
-                             NULL);
+        int r = mpg_solve(x, ncolumns, a, -1U,
+                          0, 1e-13, 0,
+                          stdout, 10000, diagnosis, 0,
+                          NULL);
 
         assert(r > 0);
 

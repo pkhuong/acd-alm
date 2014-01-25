@@ -23,7 +23,8 @@ static void mpg_project_gradient(struct vector * OUT_projected,
 }
 
 static double kappa = .55;
-static double delta = 1e-4;
+static double delta = .5;
+static double sigma = 1e-4;
 
 static int mpg_iter(approx_t * approx, struct approx_state * state,
                     double * OUT_pg, thread_pool_t * pool)
@@ -55,7 +56,7 @@ static int mpg_iter(approx_t * approx, struct approx_state * state,
                 
                 lambda = ((alpha_mg >= kappa*alpha_sd)
                           ? alpha_mg
-                          : alpha_sd-alpha_mg);
+                          : alpha_sd-delta*alpha_mg);
                 if (lambda > 1e8) lambda = 1e8;
                 if (lambda < 1e-8) lambda = 1e-8;
         }
@@ -72,8 +73,11 @@ static int mpg_iter(approx_t * approx, struct approx_state * state,
         double value = compute_value(approx, &state->x, pool);
         double estimate = dot(state->g.x, &state->y, pool);
         assert(estimate <= 0);
-        double alpha = 1;
-        while (alpha > 1e-12) {
+        double min_alpha = 1e-12, max_alpha = 1;
+        for (size_t i = 0; max_alpha-min_alpha > 1e-12; i++) {
+                assert(min_alpha < max_alpha);
+                double alpha = (min_alpha+max_alpha)/2;
+                if (i == 0) alpha = 1;
                 /* z = x + alpha step */
                 for (size_t i = 0; i < n; i++)
                         state->z.x[i]
@@ -81,10 +85,20 @@ static int mpg_iter(approx_t * approx, struct approx_state * state,
                 state->z.violationp = 0;
                 state->z.quad_value = state->z.value = nan("");
                 double trial = compute_value(approx, &state->z, pool);
-                if (trial <= value + delta*alpha*estimate)
-                        break;
+                if (trial <= value + sigma*alpha*estimate) {
+                        if (!i) goto done;
+                        min_alpha = alpha;
+                } else {
+                        max_alpha = alpha;
+                }
         }
+        for (size_t i = 0; i < n; i++)
+                state->z.x[i]
+                        = state->x.x[i]+min_alpha*state->y.x[i];
+        state->z.violationp = 0;
+        state->z.quad_value = state->z.value = nan("");
 
+done:
         {
                 /* swap */
                 struct vector temp = state->z;

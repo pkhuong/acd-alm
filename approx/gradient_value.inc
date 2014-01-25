@@ -36,11 +36,19 @@ static double compute_violation_1(size_t begin, size_t end,
                 assert((end2 == state->mult.matrix->nrows) || (0 == end2%2));
 
                 size_t n = (end2+1)/2;
-                for (size_t i = begin2/2; i < n; i++) {
-                        v2d v = viol[i]-rhs[i];
-                        v2d scaled = weight[i]*v;
-                        viol[i] = scaled;
-                        value += scaled*v;
+                if (rhs != NULL) {
+                        for (size_t i = begin2/2; i < n; i++) {
+                                v2d v = viol[i]-rhs[i];
+                                v2d scaled = weight[i]*v;
+                                viol[i] = scaled;
+                                value += scaled*v;
+                        }
+                } else {
+                        for (size_t i = begin2/2; i < n; i++) {
+                                v2d v = viol[i];
+                                v2d scaled = weight[i]*v;
+                                viol[i] = scaled;
+                        }
                 }
         }
         return value[0]+value[1];
@@ -69,6 +77,34 @@ static void compute_violation(struct vector * xv, approx_t * approx,
                                                    &state,
                                                    THREAD_POOL_REDUCE_SUM,
                                                    0);
+        xv->violationp = 1;
+}
+
+static void compute_wax(struct vector * xv, approx_t * approx,
+                        thread_pool_t * pool)
+{
+        size_t nvars = xv->n,
+                nrows = xv->nviolation;
+
+        assert(nvars == approx->nvars);
+        assert(nrows == approx->nrhs);
+
+        struct compute_violation_state state
+                = {.mult = {.out = xv->violation,
+                            .matrix = &approx->matrix->block,
+                            .x = xv->x},
+                   .rhs = NULL,
+                   .weight = (v2d*)approx->weight,
+                   .viol = (v2d*)xv->violation};
+
+        thread_pool_map_reduce(pool,
+                               0, approx->matrix->block.nblocks, 8,
+                               compute_violation_1,
+                               &state,
+                               THREAD_POOL_REDUCE_SUM,
+                               0);
+
+        xv->quad_value = nan("");
         xv->violationp = 1;
 }
 
@@ -142,6 +178,28 @@ static void gradient(struct vector * OUT_grad, approx_t * approx,
 
         thread_pool_for(pool, 0, approx->matrix->block_transpose.nblocks, 8,
                         gradient_1, &state);
+}
+
+/* A'd(W)Ax */
+static void curve_gradient(struct vector * OUT_curved, approx_t * approx,
+                           struct vector * xv, thread_pool_t * pool)
+{
+        size_t nvars = OUT_curved->n,
+                nrows = xv->nviolation;
+        assert(nvars == approx->nvars);
+        assert(nrows == approx->nrhs);
+        assert(nvars == xv->n);
+
+#ifndef NO_CACHING
+        if (!xv->violationp)
+#endif
+                compute_wax(xv, approx, pool);
+
+        int ret = sparse_matrix_multiply(OUT_curved->x, nvars,
+                                         approx->matrix,
+                                         xv->violation, xv->nviolation,
+                                         1, pool);
+        assert(!ret);
 }
 
 struct gradient2_state

@@ -287,7 +287,7 @@ struct approx_state
         size_t iteration;
         double theta;
 
-        struct vector g, g2;
+        struct vector g, g2, u;
 
         double step_length;
 };
@@ -305,6 +305,7 @@ static void init_state(struct approx_state * state,
 
         init_vector(&state->g, nvars, nrows);
         init_vector(&state->g2, nvars, nrows);
+        init_vector(&state->u, nvars, nrows);
 
         state->step_length = 1;
 }
@@ -317,6 +318,7 @@ static void destroy_state(struct approx_state * state)
         destroy_vector(&state->x);
         destroy_vector(&state->g);
         destroy_vector(&state->g2);
+        destroy_vector(&state->u);
 
         memset(state, 0, sizeof(struct approx_state));
 }

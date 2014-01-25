@@ -303,8 +303,8 @@ static void init_state(struct approx_state * state,
         state->iteration = 0;
         state->theta = 1;
 
-        init_vector(&state->g, nvars, 0);
-        init_vector(&state->g2, nvars, 0);
+        init_vector(&state->g, nvars, nrows);
+        init_vector(&state->g2, nvars, nrows);
 
         state->step_length = 1;
 }
@@ -320,6 +320,8 @@ static void destroy_state(struct approx_state * state)
 
         memset(state, 0, sizeof(struct approx_state));
 }
+
+#include "mpg.inc"
 
 static double next_theta(struct approx_state * state)
 {

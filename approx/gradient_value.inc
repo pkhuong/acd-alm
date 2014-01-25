@@ -190,11 +190,7 @@ static void curve_gradient(struct vector * OUT_curved, approx_t * approx,
         assert(nrows == approx->nrhs);
         assert(nvars == xv->n);
 
-#ifndef NO_CACHING
-        if (!xv->violationp)
-#endif
-                compute_wax(xv, approx, pool);
-
+        compute_wax(xv, approx, pool);
         int ret = sparse_matrix_multiply(OUT_curved->x, nvars,
                                          approx->matrix,
                                          xv->violation, xv->nviolation,

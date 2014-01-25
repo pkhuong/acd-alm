@@ -516,6 +516,42 @@ static void print_log(FILE * log, size_t k,
                        k, value, ng, pg, step);
 }
 
+int mpg_solve(double * x, size_t n, approx_t * approx, size_t niter,
+              double max_pg, double max_value, double min_delta,
+              FILE * log, size_t period, double * OUT_diagnosis,
+              double offset, thread_pool_t * pool)
+{
+        (void)min_delta;
+        (void)period;
+        (void)OUT_diagnosis;
+        assert(n == approx->nvars);
+
+#ifndef APPROX_NO_PERMUTE
+        if (approx->permuted)
+                approx = approx->permuted;
+#endif
+
+        struct approx_state state;
+        init_state(&state, approx->nvars, approx->nrhs);
+
+        sparse_matrix_col_permute(approx->matrix, state.x.x, n,
+                                  x, 1);
+        project(&state.x, approx->lower, approx->upper);
+
+        for (size_t i = 0; i < niter; i++) {
+                double pg;
+                mpg_iter(approx, &state, &pg, pool);
+                double value = offset + compute_value(approx, &state.x, pool);
+                if (log)
+                        fprintf(log, "%zu: %f %f\n", i, pg, value);
+                if (pg < max_pg) break;
+                if (value < max_value) break;
+        }
+
+        return 2;
+}
+
+
 int approx_solve(double * x, size_t n, approx_t * approx, size_t niter,
                  double max_pg, double max_value, double min_delta,
                  FILE * log, size_t period, double * OUT_diagnosis,

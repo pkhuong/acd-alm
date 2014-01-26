@@ -536,12 +536,15 @@ int mpg_solve(double * x, size_t n, approx_t * approx, size_t niter,
         sparse_matrix_col_permute(approx->matrix, state.x.x, n,
                                   x, 1);
         project(&state.x, approx->lower, approx->upper);
+        copy_vector(&state.z, &state.x);
+        gradient(&state.g, approx, &state.x, pool);
+        copy_vector(&state.g2, &state.g);
 
         int reason = 0;
         size_t i;
         for (i = 0; (i < niter) && !reason; i++) {
                 double pg;
-                mpg_iter(approx, &state, &pg, pool);
+                spg_iter(approx, &state, &pg, pool);
                 double value = offset + compute_value(approx, &state.x, pool);
                 if (pg < max_pg) reason = 2;
                 if (value < max_value) reason = 1;
@@ -549,7 +552,7 @@ int mpg_solve(double * x, size_t n, approx_t * approx, size_t niter,
                 if (log && ((period && (i%period == 0))
                             || (i == 0)
                             || reason))
-                        fprintf(log, "%10zu: %12g %12g\n", i, pg, value);
+                        fprintf(log, "%10zu: %12g %12g\n", i+1, pg, value);
         }
 
         sparse_matrix_col_permute(approx->matrix, x, n,

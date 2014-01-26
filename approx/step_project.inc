@@ -19,6 +19,9 @@ static void project(struct vector * xv,
                 v2d clamp_high = __builtin_ia32_minpd(clamp_low, u[i]);
                 x[i] = clamp_high;
         }
+
+        xv->violationp = 0;
+        xv->quad_value = xv->value = nan("");
 }
 
 struct step_state

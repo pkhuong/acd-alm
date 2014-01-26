@@ -48,7 +48,6 @@ static int mpg_iter(approx_t * approx, struct approx_state * state,
         {
                 /* g2 <- Hu */
                 curve_gradient(&state->g2, approx, &state->u, pool);
-                
                 double alpha_sd = -(dot(state->g.x, &state->u, pool)
                                     /dot(state->u.x, &state->g2, pool));
                 double alpha_mg = (dot(state->g2.x, &state->u, pool)
@@ -104,6 +103,96 @@ done:
                 struct vector temp = state->z;
                 state->z = state->x;
                 state->x = temp;
+        }
+
+        return 0;
+}
+
+static int pbb_iter(approx_t * approx, struct approx_state * state,
+                    double * OUT_pg, thread_pool_t * pool)
+{
+        size_t n = approx->nvars;
+
+        state->x.violationp = 0;
+        state->x.quad_value = state->x.value = nan("");
+
+        project(&state->x, approx->lower, approx->upper);
+        gradient(&state->g, approx, &state->x, pool);
+        if (OUT_pg != NULL)
+                    *OUT_pg = project_gradient_norm(&state->g,
+                                                    &state->x,
+                                                    approx->lower,
+                                                    approx->upper);
+
+        double step = state->step_length;
+
+        /* z = x - step g */
+        for (size_t i = 0; i < n; i++)
+                state->z.x[i] = state->x.x[i] - step*state->g.x[i];
+        project(&state->z, approx->lower, approx->upper);
+
+        /* y = z - x */
+        for (size_t i = 0; i < n; i++)
+                state->y.x[i] = state->z.x[i] - state->x.x[i];
+
+        state->z.violationp = 0;
+        state->z.quad_value = state->z.value = nan("");
+        gradient(&state->g2, approx, &state->z, pool);
+        for (size_t i = 0; i < n; i++)
+                state->g2.x[i] -= state->g.x[i];
+        state->step_length = (dot(state->y.x, &state->y, pool)
+                              /dot(state->y.x, &state->g2, pool));
+        {
+                /* swap */
+                struct vector temp = state->z;
+                state->z = state->x;
+                state->x = temp;
+        }
+
+        return 0;
+}
+
+static int spg_iter(approx_t * approx, struct approx_state * state,
+                    double * OUT_pg, thread_pool_t * pool)
+{
+        size_t n = approx->nvars;
+
+        /* z = prev x, g2 = prev g */
+        project(&state->x, approx->lower, approx->upper);
+        gradient(&state->g, approx, &state->x, pool);
+        if (OUT_pg != NULL)
+                    *OUT_pg = project_gradient_norm(&state->g,
+                                                    &state->x,
+                                                    approx->lower,
+                                                    approx->upper);
+        for (size_t i = 0; i < n; i++) {
+                state->y.x[i] = state->x.x[i] - state->z.x[i];
+                state->u.x[i] = state->g.x[i] - state->g2.x[i];
+        }
+
+        double step = (dot(state->y.x, &state->y, pool)
+                       /dot(state->y.x, &state->u, pool));
+
+        if (isnan(step)) step = 1;
+        if (step > 1e8) return 1;
+
+        /* z = x - step g */
+        for (size_t i = 0; i < n; i++)
+                state->z.x[i] = state->x.x[i] - step*state->g.x[i];
+        project(&state->z, approx->lower, approx->upper);
+
+        {
+                /* swap */
+                struct vector temp = state->z;
+                state->z = state->x;
+                state->x = temp;
+        }
+
+        {
+                /* swap */
+                struct vector temp = state->g2;
+                state->g2 = state->g;
+                state->g = temp;
         }
 
         return 0;

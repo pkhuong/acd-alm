@@ -761,10 +761,10 @@ void test_1(size_t nrows, size_t ncolumns)
         approx_t * a = approx_make(m, nrows, rhs, NULL, ncolumns,
                                  NULL, NULL, NULL);
         double diagnosis[5];
-        int r = mpg_solve(x, ncolumns, a, -1U,
-                          0, 1e-13, 0,
-                          stdout, 10000, diagnosis, 0,
-                          NULL);
+        int r = cd_solve(x, ncolumns, a, -1U,
+                         0, 1e-13, 0,
+                         stdout, 10000, diagnosis, 0,
+                         NULL);
 
         assert(r > 0);
 

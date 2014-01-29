@@ -244,13 +244,14 @@ static void clear_cd_state(struct cd_state * state)
         memset(state, 0, sizeof(struct cd_state));
 }
 
-static double one_step(struct cd_state * state, uint32_t column)
+static double one_step(struct cd_state * state, uint32_t column,
+                       double scale)
 {
         assert(column < state->ncolumn);
         double xi = state->x[column], gi = state->g[column];
         if (gi == 0) return 0;
         struct column_info * info = state->info+column;
-        double xp = xi - (gi*info->inv_qii);
+        double xp = xi - scale*(gi*info->inv_qii);
         int clamped = 0;
         if (xp < info->lo) {
                 clamped = 1;
@@ -267,16 +268,17 @@ static double one_step(struct cd_state * state, uint32_t column)
         spaxpy(state->g, step, &info->qi);
         //spaxpy(state->violation, step, &info->ai);
 
-        if (!clamped) {
-                assert(fabs(state->g[column]) < 1e-4);
-                state->g[column] = 0;
-        }
+        /* if (!clamped) { */
+        /*         assert(fabs(state->g[column]) < 1e-4); */
+        /*         state->g[column] = 0; */
+        /* } */
 
         return step;
 }
 
 static double major_step(struct cd_state * state, approx_t * instance,
-                         double offset, FILE * log)
+                         double offset, FILE * log,
+                         double scale)
 {
         clamp(state->x, instance);
         double value = gradient(state->g, state->violation,
@@ -305,7 +307,7 @@ static double major_step(struct cd_state * state, approx_t * instance,
 
         fisher_yates(columns, n, sizeof(uint32_t));
         for (size_t i = 0; i < n; i++) {
-                one_step(state, columns[i]);
+                one_step(state, columns[i], scale);
         }
 
         free(columns);
@@ -324,11 +326,10 @@ static double major_step(struct cd_state * state, approx_t * instance,
 
 int cd_solve(double * x, size_t n, approx_t * approx, size_t niter,
              double max_pg, double max_value, double min_delta,
-             FILE * log, size_t period, double * OUT_diagnosis,
+             FILE * file, size_t period, double * OUT_diagnosis,
              double offset, thread_pool_t * pool)
 {
         (void)min_delta;
-        (void)log;
         (void)pool;
 
         period /= 10;
@@ -343,11 +344,12 @@ int cd_solve(double * x, size_t n, approx_t * approx, size_t niter,
                 int print = ((i == 0)
                              || (period && ((i+1)%period == 0))
                              || (i+1 == niter));
-                if (print && (log != NULL)) {
-                        fprintf(log, "%6zu ", i+1);
+                if (print && (file != NULL)) {
+                        fprintf(file, "%6zu ", i+1);
                 }
                 double z = major_step(&state, approx, offset,
-                                      print?log:NULL);
+                                      print?file:NULL,
+                                      1);
                 double pg = norm_pg(state.g, state.ncolumn,
                                     state.x, approx->lower, approx->upper);
                 if (z < max_value) {

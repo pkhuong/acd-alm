@@ -399,8 +399,6 @@ static int short_step(approx_t * approx, struct approx_state * state,
                 assert(state->y.violationp);
                 struct vector * g[2] = {&state->g, &state->g2};
                 struct vector * x[2]= {&state->z, &state->y};
-                gradient2(g, approx, x, pool);
-
                 gradient2_step(approx, pool,
                                g, x,
                                &state->zp, state->theta,

@@ -316,7 +316,7 @@ static double major_step(struct cd_state * state, approx_t * instance,
         value = gradient(state->g, state->violation,
                          state->x, instance);
         if (log != NULL)
-                printf("\tLeaving: %12g %12g %12g\n",
+                printf("\t\tLeaving:  %12g %12g %12g\n",
                        value + offset,
                        norm_pg(state->g, state->ncolumn,
                                state->x, instance->lower, instance->upper),
@@ -345,7 +345,7 @@ int cd_solve(double * x, size_t n, approx_t * approx, size_t niter,
                              || (period && ((i+1)%period == 0))
                              || (i+1 == niter));
                 if (print && (file != NULL)) {
-                        fprintf(file, "%6zu ", i+1);
+                        fprintf(file, "\t%6zu ", i+1);
                 }
                 double z = major_step(&state, approx, offset,
                                       print?file:NULL,

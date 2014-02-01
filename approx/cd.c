@@ -154,7 +154,7 @@ static void clear_sparse(struct sparse_vector * vector)
 
 struct column_info
 {
-        double probability, inv_qii, lo, hi;
+        double probability, inv_step, lo, hi;
         // [A' D(weight) A]_i
         struct sparse_vector qi;
         // to update viol = [Ax - b]
@@ -194,8 +194,8 @@ static void column_info(struct column_info * OUT_info,
         OUT_info->probability = 1;
 #endif
 
-        OUT_info->inv_qii = 1.0/q[column];
-        assert(OUT_info->inv_qii > 0);
+        OUT_info->inv_step = 1.0/norm;
+        assert(OUT_info->inv_step > 0);
         OUT_info->lo = instance->lower[column];
         OUT_info->hi = instance->upper[column];
 
@@ -229,8 +229,13 @@ static void init_cd_state(struct cd_state * state,
         state->info = calloc(nvars, sizeof(struct column_info));
         state->ncolumn = nvars;
 
-        for (size_t i = 0; i < nvars; i++)
+        double min_inv_step = HUGE_VAL;
+        for (size_t i = 0; i < nvars; i++) {
                 column_info(state->info+i, instance, i);
+                min_inv_step = fmin(min_inv_step, state->info[i].inv_step);
+        }
+        for (size_t i = 0; i < nvars; i++)
+                state->info[i].inv_step = min_inv_step;
 }
 
 static void clear_cd_state(struct cd_state * state)
@@ -251,7 +256,7 @@ static double one_step(struct cd_state * state, uint32_t column,
         double xi = state->x[column], gi = state->g[column];
         if (gi == 0) return 0;
         struct column_info * info = state->info+column;
-        double xp = xi - scale*(gi*info->inv_qii);
+        double xp = xi - scale*(gi*info->inv_step);
         int clamped = 0;
         if (xp < info->lo) {
                 clamped = 1;
@@ -349,7 +354,7 @@ int cd_solve(double * x, size_t n, approx_t * approx, size_t niter,
                 }
                 double z = major_step(&state, approx, offset,
                                       print?file:NULL,
-                                      1);
+                                      .5);
                 double pg = norm_pg(state.g, state.ncolumn,
                                     state.x, approx->lower, approx->upper);
                 if (z < max_value) {

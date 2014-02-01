@@ -363,8 +363,9 @@ int cd_solve(double * x, size_t n, approx_t * approx, size_t niter,
         }
 
         if (OUT_diagnosis != NULL) {
-                OUT_diagnosis[0] = gradient(state.g, state.violation,
-                                            state.x, approx);
+                OUT_diagnosis[0] = (gradient(state.g, state.violation,
+                                             state.x, approx)
+                                    + offset);
                 OUT_diagnosis[1] = norm_2(state.g, state.ncolumn);
                 OUT_diagnosis[2] = norm_pg(state.g, state.ncolumn,
                                            state.x, approx->lower,
